@@ -12,6 +12,7 @@ import base64
 SAVED_EXCEL_PATH = "permanent_production_schedule.xlsx"
 NOTES_DB_PATH = "production_notes.txt"
 MASTER_PASSWORD = "Fineformulation"
+ENTRY_SECURITY_CODE = "1234"  # [대표님 지정 핵심 보안 코드]
 
 # [오너 지시 정규식 핵심 축]: 띄어쓰기, 언더바 다 무시하고 오직 앞자리 순수 6자리 코드만 정밀 추출
 def extract_pure_6_code(text):
@@ -38,7 +39,60 @@ def get_saved_local_image_base64(pure_code):
 # 2. 스트림릿 웹 대시보드 UI 레이아웃 구성
 # =========================================================================
 st.set_page_config(layout="wide", page_title="생산 스케줄 비주얼 대시보드")
-st.title("🏭 생산 스케줄 마스터 시스템")
+
+# ---------------------------------------------------------------------
+# [🚨 오너 지시 핵심 조항: 1234 게이트웨이 철통 보안 스크린 가동]
+# ---------------------------------------------------------------------
+if "app_unlocked" not in st.session_state:
+    st.session_state["app_unlocked"] = False
+
+if not st.session_state["app_unlocked"]:
+    # 앱 진입 전 전체 화면을 잠그는 보안 정문 레이아웃 빌딩
+    st.markdown("""
+        <style>
+            /* 메인 대시보드 배경 은닉 프로토콜 */
+            .stApp { background-color: #0f172a !important; }
+            .security-gate {
+                text-align: center;
+                margin-top: 15vh;
+                padding: 40px;
+                background-color: #1e2530;
+                border: 2px solid #38bdf8;
+                border-radius: 16px;
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+                max-width: 500px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+        <div class="security-gate">
+            <h1 style="color: #38bdf8; font-size: 28px; font-weight: bold; margin-bottom: 10px;">🔒 FINE FORMULATION</h1>
+            <p style="color: #94a3b8; font-size: 15px; margin-bottom: 25px;">본 시스템은 기업 기밀 자산 보호 구역입니다.<br>계정 관리자가 부여한 보안 코드를 입력하십시오.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # 정중앙 집중형 보안 코드 입력 패널 체결
+    cols = st.columns([1, 2, 1])
+    with cols[1]:
+        input_gate_code = st.text_input("🔑 보안 코드 입력 (Security Code)", type="password", key="gate_code_input", help="진입 코드를 입력 후 Enter를 누르십시오.")
+        
+        if input_gate_code == ENTRY_SECURITY_CODE:
+            st.session_state["app_unlocked"] = True
+            st.success("🔓 자격 증명이 확인되었습니다. 시스템을 개방합니다.")
+            time.sleep(0.5)
+            st.rerun()
+        elif input_gate_code != "":
+            st.error("❌ 보안 코드가 올바르지 않습니다. 접근이 거부되었습니다.")
+            
+    st.stop() # 코드가 틀리거나 입력 전이면 하단 마스터 소스코드 실행을 완벽하게 차단
+
+# ---------------------------------------------------------------------
+# [🔓 게이트웨이 통과 시 해제되는 오리지널 마스터 대시보드 엔진 인프라]
+# ---------------------------------------------------------------------
+st.title("🏭 생산 스케줄 마스터 데이터 대시보드")
 
 has_saved_file = os.path.exists(SAVED_EXCEL_PATH)
 final_file_target = SAVED_EXCEL_PATH if os.path.exists(SAVED_EXCEL_PATH) else None
@@ -52,7 +106,7 @@ with st.sidebar:
     else:
         st.markdown('<div style="color:#f87171; font-size:14px; font-weight:bold; background-color:#7f1d1d; padding:10px; border-radius:8px; margin-bottom:15px;">💡 마스터 엑셀 파일 업로드가 필요합니다.</div>', unsafe_allow_html=True)
     
-    input_password = st.text_input("🔓 관리자 승인 인증 (Password)", type="password", key="auth_pwd_input")
+    input_password = st.text_input("🔓 데이터 제어 승인 암호", type="password", key="auth_pwd_input")
     is_authenticated = (input_password == MASTER_PASSWORD)
 
     st.markdown("---")
@@ -65,10 +119,12 @@ with st.sidebar:
         st.success("🚀 마스터 스케줄 파일 교체 성공!")
         time.sleep(1)
         st.rerun()
+        
+    st.markdown("---")
+    if st.button("🔒 대시보드 즉시 잠금 (로그아웃)", use_container_width=True):
+        st.session_state["app_unlocked"] = False
+        st.rerun()
 
-# ---------------------------------------------------------------------
-# [트렐로 마스터 백업 파이프라인]
-# ---------------------------------------------------------------------
 if final_file_target:
     raw_df = pd.read_excel(final_file_target, usecols="A,C,F,K,L,O,P,U", header=None)
     if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
@@ -185,7 +241,7 @@ if final_file_target:
                             progress_bar.progress(int((i + 1) / total_items * 100))
                         
                         status_placeholder.empty()
-                        st.markdown(f'<div style="color:#4ade80; font-size:16px; font-weight:bold; background-color:#064e3b; padding:12px; border-radius:8px; margin-top:10px;">🎯 백업 마감 결과: 총 {sync_success_count}개 품목의 공식 정형 썸네일 다른 이름 저장 성공! 바로 F5를 눌러 확인하십시오.</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="color:#4ade80; font-size:16px; font-weight:bold; background-color:#064e3b; padding:12px; border-radius:8px; margin-top:10px;">🎯 백업 마감 결과: 총 {sync_success_count}개 품목의 공식 정형 썸네일 다른 이름 저장 성공!</div>', unsafe_allow_html=True)
                     else:
                         status_placeholder.empty()
                         st.error("❌ 트렐로 API 통신 세션 인증 실패.")
@@ -193,20 +249,16 @@ if final_file_target:
                     status_placeholder.empty()
                     st.error("❌ 마스터 엑셀에서 코드를 식별하지 못했습니다.")
             else:
-                st.error("❌ 패스워드 승인이 필요합니다.")
+                st.error("❌ 데이터 제어 승인 암호가 일치하지 않습니다.")
 
     # ---------------------------------------------------------------------
-    # 5. [🚨 완공 공정]: 스트림릿 인라인 태그 간섭을 원천 파쇄하는 하이퍼 그래픽 템플릿
+    # 5. 디자인 격자 템플릿 CSS 명세
     # ---------------------------------------------------------------------
     card_container_style = "background-color:#1e2530 !important; border:1px solid #2d3748 !important; border-radius:14px !important; padding:18px !important; box-shadow:0 10px 15px -3px rgba(0,0,0,0.4) !important;"
     text_base = "margin:0px !important; padding:0px !important; text-align:left !important; line-height:1.4 !important;"
 
     st.markdown("""
         <style>
-            div[data-testid="stTextInput"] { margin-top: -15px !important; padding: 0px 5px !important; }
-            div[data-testid="stTextInput"] input { background-color: #111622 !important; color: #ffffff !important; border: 1px solid #2d3748 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; }
-            
-            /* [오너 지시 직통 공정]: 완전한 가로세로 1:1 정사각형 고정 프레임 */
             .owner-square-frame {
                 width: 100% !important;
                 aspect-ratio: 1 / 1 !important;
@@ -220,14 +272,12 @@ if final_file_target:
                 box-sizing: border-box !important;
                 margin-bottom: 8px !important;
             }
-            
-            /* [대표님 핵심 지시 공정]: 잘림 0% 원본 비율 전체 무조건 강제 표출 */
             .owner-square-frame img {
                 max-width: 100% !important;
                 max-height: 100% !important;
                 width: auto !important;
                 height: auto !important;
-                object-fit: contain !important; /* 비율 강제 훼손 및 크롭 잘림을 원천 차단하고 내부에 완전 쑤셔 넣음 */
+                object-fit: contain !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -247,8 +297,6 @@ if final_file_target:
                     local_base64_data = get_saved_local_image_base64(pure_excel_code)
                     
                     if local_base64_data:
-                        # [🚨 스트림릿 함수 전면 철거 및 다이렉트 HTML 하드코딩 투입]
-                        # 프레임워크의 이미지 인라인 스타일 간섭을 물리적으로 완전히 씹어먹고 100%contain을 강제 성립시킵니다.
                         st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
                     else:
                         st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
