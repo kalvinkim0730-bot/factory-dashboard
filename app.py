@@ -6,6 +6,7 @@ import time
 import re
 import io
 import os
+import base64
 
 # 가상 서버 루트 작업 영역 직통 세팅
 SAVED_EXCEL_PATH = "permanent_production_schedule.xlsx"
@@ -21,13 +22,14 @@ def extract_pure_6_code(text):
     return match.group(1) if match else ""
 
 # [대표님 명세 1순위 조항]: 외부 서버 차단막을 원천 파괴하기 위해 로컬 저장 파일을 1순위로 호출
-def get_saved_local_image_bytes(pure_code):
+def get_saved_local_image_base64(pure_code):
     pure_code_clean = str(pure_code).strip().upper()
     target_path = f"{pure_code_clean}.png"
     if os.path.exists(target_path):
         try:
             with open(target_path, "rb") as f:
-                return f.read()
+                encoded = base64.b64encode(f.read()).decode()
+                return f"data:image/png;base64,{encoded}"
         except Exception:
             return None
     return None
@@ -194,7 +196,7 @@ if final_file_target:
                 st.error("❌ 패스워드 승인이 필요합니다.")
 
     # ---------------------------------------------------------------------
-    # 5. [🚨 완공 공정]: 스트림릿 고유 스타일을 완전히 씹어먹는 와일드카드(img) 패치 주입
+    # 5. [🚨 완공 공정]: 스트림릿 인라인 태그 간섭을 원천 파쇄하는 하이퍼 그래픽 템플릿
     # ---------------------------------------------------------------------
     card_container_style = "background-color:#1e2530 !important; border:1px solid #2d3748 !important; border-radius:14px !important; padding:18px !important; box-shadow:0 10px 15px -3px rgba(0,0,0,0.4) !important;"
     text_base = "margin:0px !important; padding:0px !important; text-align:left !important; line-height:1.4 !important;"
@@ -204,30 +206,28 @@ if final_file_target:
             div[data-testid="stTextInput"] { margin-top: -15px !important; padding: 0px 5px !important; }
             div[data-testid="stTextInput"] input { background-color: #111622 !important; color: #ffffff !important; border: 1px solid #2d3748 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; }
             
-            /* 이미지 외부 프레임을 완벽한 가로세로 1:1 정사각형으로 절대 고정 */
-            div[data-testid="stImage"] { 
-                display: flex !important; 
-                justify-content: center !important; 
-                align-items: center !important;
-                background-color: #1e293b !important; 
-                border-radius: 12px !important; 
-                padding: 10px !important; 
-                margin-bottom: 8px !important; 
+            /* [오너 지시 직통 공정]: 완전한 가로세로 1:1 정사각형 고정 프레임 */
+            .owner-square-frame {
                 width: 100% !important;
-                aspect-ratio: 1 / 1 !important; 
+                aspect-ratio: 1 / 1 !important;
+                background-color: #1e293b !important;
+                border-radius: 12px !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
                 overflow: hidden !important;
+                padding: 10px !important;
                 box-sizing: border-box !important;
+                margin-bottom: 8px !important;
             }
             
-            /* [대표님 최종 명령 명세 조항 집행]: */
-            /* 스트림릿 내장 엔진의 크기 강제 지정을 완전히 덮어쓰고, 짤림 0% 정비율로 박스 안에 전체 다 표출 */
-            div[data-testid="stImage"] img { 
-                width: auto !important;
-                height: auto !important;
+            /* [대표님 핵심 지시 공정]: 잘림 0% 원본 비율 전체 무조건 강제 표출 */
+            .owner-square-frame img {
                 max-width: 100% !important;
                 max-height: 100% !important;
-                object-fit: contain !important; /* 강제 자르기 차단, 비율 유지하며 정사각형 내부에 완전 쑤셔 넣음 */
-                object-position: center center !important;
+                width: auto !important;
+                height: auto !important;
+                object-fit: contain !important; /* 비율 강제 훼손 및 크롭 잘림을 원천 차단하고 내부에 완전 쑤셔 넣음 */
             }
         </style>
     """, unsafe_allow_html=True)
@@ -244,12 +244,14 @@ if final_file_target:
                 pure_excel_code = extract_pure_6_code(excel_code)
                 
                 with cols[idx % 6]:
-                    local_saved_bytes = get_saved_local_image_bytes(pure_excel_code)
+                    local_base64_data = get_saved_local_image_base64(pure_excel_code)
                     
-                    if local_saved_bytes:
-                        st.image(local_saved_bytes, use_container_width=True)
+                    if local_base64_data:
+                        # [🚨 스트림릿 함수 전면 철거 및 다이렉트 HTML 하드코딩 투입]
+                        # 프레임워크의 이미지 인라인 스타일 간섭을 물리적으로 완전히 씹어먹고 100%contain을 강제 성립시킵니다.
+                        st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
                     else:
-                        st.html(f'<div style="width:100%; aspect-ratio:1/1; background-color:#1e293b; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
+                        st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                     
                     st.html(f"""
                         <div style="{card_container_style}">
@@ -283,12 +285,12 @@ if final_file_target:
                 pure_excel_code = extract_pure_6_code(excel_code)
                 
                 with cols[idx % 6]:
-                    local_saved_bytes = get_saved_local_image_bytes(pure_excel_code)
+                    local_base64_data = get_saved_local_image_base64(pure_excel_code)
                     
-                    if local_saved_bytes:
-                        st.image(local_saved_bytes, use_container_width=True)
+                    if local_base64_data:
+                        st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
                     else:
-                        st.html(f'<div style="width:100%; aspect-ratio:1/1; background-color:#1e293b; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
+                        st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                     
                     st.html(f"""
                         <div style="{card_container_style}">
