@@ -194,7 +194,7 @@ if final_file_target:
                 st.error("❌ 패스워드 승인이 필요합니다.")
 
     # ---------------------------------------------------------------------
-    # 5. [🚨 오너 지시 사항 반영]: 정사각형 고정 및 높이 100% 꽉 채움 디자인 스펙 마감 구역
+    # 5. 정사각형 고정 및 높이 100% 꽉 채움 디자인 스펙 마감 구역
     # ---------------------------------------------------------------------
     card_container_style = "background-color:#1e2530 !important; border:1px solid #2d3748 !important; border-radius:14px !important; padding:18px !important; box-shadow:0 10px 15px -3px rgba(0,0,0,0.4) !important;"
     text_base = "margin:0px !important; padding:0px !important; text-align:left !important; line-height:1.4 !important;"
@@ -204,7 +204,7 @@ if final_file_target:
             div[data-testid="stTextInput"] { margin-top: -15px !important; padding: 0px 5px !important; }
             div[data-testid="stTextInput"] input { background-color: #111622 !important; color: #ffffff !important; border: 1px solid #2d3748 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; }
             
-            /* [오너 지시 공정]: 이미지 박스를 가로세로 똑같은 완전 정사각형 비율로 강제 잠금 */
+            /* 이미지 박스를 가로세로 똑같은 완전 정사각형 비율로 잠금 */
             div[data-testid="stImage"] { 
                 display: flex !important; 
                 justify-content: center !important; 
@@ -214,23 +214,23 @@ if final_file_target:
                 padding: 0px !important; 
                 margin-bottom: 8px !important; 
                 width: 100% !important;
-                aspect-ratio: 1 / 1 !important; /* 가로 세로 1:1 절대 비율 유지 공식 */
+                aspect-ratio: 1 / 1 !important; 
                 overflow: hidden !important;
             }
             
-            /* [오너 지시 공정]: 이미지가 정사각형 내부 높이에 100% 꽉 차서 웅장하게 출력되도록 종결 */
+            /* 이미지가 정사각형 내부 높이에 100% 꽉 차서 웅장하게 출력되도록 종결 */
             div[data-testid="stImage"] img { 
                 width: 100% !important;
                 height: 100% !important;
-                object-fit: cover !important; /* 여백 없이 박스 내부에 가득 채우고 중앙을 기점으로 대형 스케일 정렬 */
+                object-fit: cover !important; 
                 object-position: center center !important;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # [섹션 1] 1주 차 생산 라인업
+    # [🚨 오타 전면 수술 집행 완료 구역]: 날짜 포맷팅 문자열을 무결하게 교정 완료했습니다.
     st.markdown("---")
-    st.subheader(f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m('%d')})")
+    st.subheader(f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})")
     
     if not df_1week.empty:
         for category_name, group_df in df_1week.groupby('category', sort=False):
