@@ -194,7 +194,7 @@ if final_file_target:
                 st.error("❌ 패스워드 승인이 필요합니다.")
 
     # ---------------------------------------------------------------------
-    # 5. [🚨 완공 공정]: 정사각형 비율 유지 및 짤림 없는 전체 표시 CSS
+    # 5. [🚨 완공 공정]: 스트림릿 고유 스타일을 완전히 씹어먹는 와일드카드(img) 패치 주입
     # ---------------------------------------------------------------------
     card_container_style = "background-color:#1e2530 !important; border:1px solid #2d3748 !important; border-radius:14px !important; padding:18px !important; box-shadow:0 10px 15px -3px rgba(0,0,0,0.4) !important;"
     text_base = "margin:0px !important; padding:0px !important; text-align:left !important; line-height:1.4 !important;"
@@ -204,14 +204,14 @@ if final_file_target:
             div[data-testid="stTextInput"] { margin-top: -15px !important; padding: 0px 5px !important; }
             div[data-testid="stTextInput"] input { background-color: #111622 !important; color: #ffffff !important; border: 1px solid #2d3748 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; }
             
-            /* 이미지 박스를 완벽한 가로세로 1:1 정사각형으로 굳건히 잠금 */
+            /* 이미지 외부 프레임을 완벽한 가로세로 1:1 정사각형으로 절대 고정 */
             div[data-testid="stImage"] { 
                 display: flex !important; 
                 justify-content: center !important; 
                 align-items: center !important;
                 background-color: #1e293b !important; 
                 border-radius: 12px !important; 
-                padding: 10px !important; /* 위아래 테두리에 닿지 않도록 미세 안전 마진 확보 */
+                padding: 10px !important; 
                 margin-bottom: 8px !important; 
                 width: 100% !important;
                 aspect-ratio: 1 / 1 !important; 
@@ -219,13 +219,14 @@ if final_file_target:
                 box-sizing: border-box !important;
             }
             
-            /* [대표님 핵심 지시 조항]: 짤리는 부위 0% 원본 비율 전체 노출 프로토콜 주입 */
+            /* [대표님 최종 명령 명세 조항 집행]: */
+            /* 스트림릿 내장 엔진의 크기 강제 지정을 완전히 덮어쓰고, 짤림 0% 정비율로 박스 안에 전체 다 표출 */
             div[data-testid="stImage"] img { 
-                max-width: 100% !important;
-                max-height: 100% !important;
                 width: auto !important;
                 height: auto !important;
-                object-fit: contain !important; /* 잘림 없이 정사각형 내부 틀 안에 정비율 전체 출력 */
+                max-width: 100% !important;
+                max-height: 100% !important;
+                object-fit: contain !important; /* 강제 자르기 차단, 비율 유지하며 정사각형 내부에 완전 쑤셔 넣음 */
                 object-position: center center !important;
             }
         </style>
