@@ -65,7 +65,7 @@ with st.sidebar:
         st.rerun()
 
 # ---------------------------------------------------------------------
-# [트렐로 카드 공식 커버 대표 썸네일 수집 파이프라인]
+# [트렐로 마스터 백업 파이프라인]
 # ---------------------------------------------------------------------
 if final_file_target:
     raw_df = pd.read_excel(final_file_target, usecols="A,C,F,K,L,O,P,U", header=None)
@@ -108,7 +108,6 @@ if final_file_target:
         if st.button("🔄 현재 스케줄 이미지 서버에 저장", use_container_width=True):
             if is_authenticated:
                 sync_success_count = 0
-                
                 status_placeholder = st.empty()
                 status_placeholder.info("🔄 마스터 엑셀에서 순수 6자리 코드 스캔 중...")
                 
@@ -132,8 +131,7 @@ if final_file_target:
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                     }
                     
-                    status_placeholder.info(f"🛰️ 오리지널 썸네일 수집 허브 연동 (총 {len(target_pure_codes)}개 코드 대조)...")
-                    # 커버 데이터를 완벽히 확보하기 위해 카드 목록 호출 단계에 옵션을 강제 주입합니다.
+                    status_placeholder.info(f"🛰️ 오리지널 썸네일 수집 허브 연동 시작...")
                     url = f"https://api.trello.com/1/boards/{TRELLO_BOARD_ID}/cards"
                     params = {'key': TRELLO_API_KEY, 'token': TRELLO_TOKEN, 'attachments': 'true', 'attachment_fields': 'all', 'limit': '1000'}
                     card_res = requests.get(url, headers=secured_headers, params=params, timeout=25)
@@ -153,27 +151,22 @@ if final_file_target:
                                 card_name_clean = card.get('name', '').replace(" ", "").replace("_", "").upper()
                                 if code_key_clean in card_name_clean:
                                     cover = card.get('cover', {})
-                                    
-                                    # [🚨 도면 파일 간섭 배제 수술 축]: 도면 첨부파일이 아니라 실무진이 지정한 공식 카드 "대표 커버 이미지" 주소를 타겟팅
                                     if cover and cover.get('scaled'):
                                         scaled_images = cover.get('scaled', [])
                                         if scaled_images:
-                                            # 가장 화질이 높은 대형 대표 썸네일 규격 주소 획득
                                             trello_url = scaled_images[-1].get('url')
                                             
-                                    # 만약 공식 커버가 지정되지 않은 예외적인 경우에만 첨부파일 백업본 작동
-                                    if not trello_url:
-                                        attachments = card.get('attachments', [])
-                                        if attachments:
-                                            for att in attachments:
-                                                a_url = att.get('url', '')
-                                                # 도면(label, cap, size) 텍스트 찌꺼기가 파일명에 들어있으면 강제 스킵 필터링
-                                                a_url_lower = a_url.lower()
-                                                if any(skip in a_url_lower for skip in ['label', 'cap', 'size', 'spec', '도면']):
-                                                    continue
-                                                if any(ext in a_url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-                                                    trello_url = a_url
-                                                    break
+                                if not trello_url:
+                                    attachments = card.get('attachments', [])
+                                    if attachments:
+                                        for att in attachments:
+                                            a_url = att.get('url', '')
+                                            a_url_lower = a_url.lower()
+                                            if any(skip in a_url_lower for skip in ['label', 'cap', 'size', 'spec', '도면']):
+                                                continue
+                                            if any(ext in a_url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                                                trello_url = a_url
+                                                break
                                 if trello_url:
                                     break
                             
@@ -201,9 +194,8 @@ if final_file_target:
                 st.error("❌ 패스워드 승인이 필요합니다.")
 
     # ---------------------------------------------------------------------
-    # 5. 마스터 대시보드 메인 레이아웃 카드 스펙 마감 구역
+    # 5. [🚨 오너 지시 사항 반영]: 정사각형 고정 및 높이 100% 꽉 채움 디자인 스펙 마감 구역
     # ---------------------------------------------------------------------
-    box_style = "width:100% !important; height:180px !important; background-color:#1e293b !important; border-radius:10px !important; display:flex !important; align-items:center !important; justify-content:center !important; overflow:hidden !important; margin-bottom:12px !important;"
     card_container_style = "background-color:#1e2530 !important; border:1px solid #2d3748 !important; border-radius:14px !important; padding:18px !important; box-shadow:0 10px 15px -3px rgba(0,0,0,0.4) !important;"
     text_base = "margin:0px !important; padding:0px !important; text-align:left !important; line-height:1.4 !important;"
 
@@ -211,15 +203,34 @@ if final_file_target:
         <style>
             div[data-testid="stTextInput"] { margin-top: -15px !important; padding: 0px 5px !important; }
             div[data-testid="stTextInput"] input { background-color: #111622 !important; color: #ffffff !important; border: 1px solid #2d3748 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; }
-            /* 고해상도 화장품 디자인 원본 정밀 보존 고정 비율 CSS 프로토콜 */
-            div[data-testid="stImage"] { display: flex !important; justify-content: center !important; background-color: #1e293b !important; border-radius: 12px !important; padding: 10px !important; margin-bottom: 8px !important; height: 180px !important; align-items: center !important; }
-            div[data-testid="stImage"] img { max-height: 160px !important; width: auto !important; object-fit: contain !important; }
+            
+            /* [오너 지시 공정]: 이미지 박스를 가로세로 똑같은 완전 정사각형 비율로 강제 잠금 */
+            div[data-testid="stImage"] { 
+                display: flex !important; 
+                justify-content: center !important; 
+                align-items: center !important;
+                background-color: #1e293b !important; 
+                border-radius: 12px !important; 
+                padding: 0px !important; 
+                margin-bottom: 8px !important; 
+                width: 100% !important;
+                aspect-ratio: 1 / 1 !important; /* 가로 세로 1:1 절대 비율 유지 공식 */
+                overflow: hidden !important;
+            }
+            
+            /* [오너 지시 공정]: 이미지가 정사각형 내부 높이에 100% 꽉 차서 웅장하게 출력되도록 종결 */
+            div[data-testid="stImage"] img { 
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: cover !important; /* 여백 없이 박스 내부에 가득 채우고 중앙을 기점으로 대형 스케일 정렬 */
+                object-position: center center !important;
+            }
         </style>
     """, unsafe_allow_html=True)
 
     # [섹션 1] 1주 차 생산 라인업
     st.markdown("---")
-    st.subheader(f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})")
+    st.subheader(f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m('%d')})")
     
     if not df_1week.empty:
         for category_name, group_df in df_1week.groupby('category', sort=False):
@@ -233,9 +244,9 @@ if final_file_target:
                     local_saved_bytes = get_saved_local_image_bytes(pure_excel_code)
                     
                     if local_saved_bytes:
-                        st.image(local_saved_bytes, use_container_width=False)
+                        st.image(local_saved_bytes, use_container_width=True)
                     else:
-                        st.html(f'<div style="{box_style}"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 단추 클릭 필요]</div></div>')
+                        st.html(f'<div style="width:100%; aspect-ratio:1/1; background-color:#1e293b; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                     
                     st.html(f"""
                         <div style="{card_container_style}">
@@ -272,9 +283,9 @@ if final_file_target:
                     local_saved_bytes = get_saved_local_image_bytes(pure_excel_code)
                     
                     if local_saved_bytes:
-                        st.image(local_saved_bytes, use_container_width=False)
+                        st.image(local_saved_bytes, use_container_width=True)
                     else:
-                        st.html(f'<div style="{box_style}"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 단추 클릭 필요]</div></div>')
+                        st.html(f'<div style="width:100%; aspect-ratio:1/1; background-color:#1e293b; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                     
                     st.html(f"""
                         <div style="{card_container_style}">
