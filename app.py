@@ -194,7 +194,7 @@ if final_file_target:
                 st.error("❌ 패스워드 승인이 필요합니다.")
 
     # ---------------------------------------------------------------------
-    # 5. 정사각형 고정 및 높이 100% 꽉 채움 디자인 스펙 마감 구역
+    # 5. [🚨 완공 공정]: 정사각형 비율 유지 및 짤림 없는 전체 표시 CSS
     # ---------------------------------------------------------------------
     card_container_style = "background-color:#1e2530 !important; border:1px solid #2d3748 !important; border-radius:14px !important; padding:18px !important; box-shadow:0 10px 15px -3px rgba(0,0,0,0.4) !important;"
     text_base = "margin:0px !important; padding:0px !important; text-align:left !important; line-height:1.4 !important;"
@@ -204,31 +204,33 @@ if final_file_target:
             div[data-testid="stTextInput"] { margin-top: -15px !important; padding: 0px 5px !important; }
             div[data-testid="stTextInput"] input { background-color: #111622 !important; color: #ffffff !important; border: 1px solid #2d3748 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; }
             
-            /* 이미지 박스를 가로세로 똑같은 완전 정사각형 비율로 잠금 */
+            /* 이미지 박스를 완벽한 가로세로 1:1 정사각형으로 굳건히 잠금 */
             div[data-testid="stImage"] { 
                 display: flex !important; 
                 justify-content: center !important; 
                 align-items: center !important;
                 background-color: #1e293b !important; 
                 border-radius: 12px !important; 
-                padding: 0px !important; 
+                padding: 10px !important; /* 위아래 테두리에 닿지 않도록 미세 안전 마진 확보 */
                 margin-bottom: 8px !important; 
                 width: 100% !important;
                 aspect-ratio: 1 / 1 !important; 
                 overflow: hidden !important;
+                box-sizing: border-box !important;
             }
             
-            /* 이미지가 정사각형 내부 높이에 100% 꽉 차서 웅장하게 출력되도록 종결 */
+            /* [대표님 핵심 지시 조항]: 짤리는 부위 0% 원본 비율 전체 노출 프로토콜 주입 */
             div[data-testid="stImage"] img { 
-                width: 100% !important;
-                height: 100% !important;
-                object-fit: cover !important; 
+                max-width: 100% !important;
+                max-height: 100% !important;
+                width: auto !important;
+                height: auto !important;
+                object-fit: contain !important; /* 잘림 없이 정사각형 내부 틀 안에 정비율 전체 출력 */
                 object-position: center center !important;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # [🚨 오타 전면 수술 집행 완료 구역]: 날짜 포맷팅 문자열을 무결하게 교정 완료했습니다.
     st.markdown("---")
     st.subheader(f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})")
     
