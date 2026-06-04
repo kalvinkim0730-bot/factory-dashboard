@@ -174,10 +174,8 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # 꼬임 방지를 위해 헤더 자동 지정 해제
     raw_excel = pd.read_excel(final_file_target, header=None)
     
-    # [🚨 타입 에러 완치 마감]: 모든 데이터를 무조건 스트링(str) 배열로 안전 필터링하여 제목 열을 추적합니다.
     start_row_idx = 0
     for idx, row in raw_excel.iterrows():
         row_str_list = [str(cell) for cell in row.dropna().tolist()]
@@ -186,8 +184,7 @@ if final_file_target:
             start_row_idx = idx + 1
             break
             
-    # [🚨 오너 지시 칼럼 대조 정밀 배선]:
-    # 가격 전면 제외 / K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
+    # 알파벳 열 매핑 고정: K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_excel)):
         row_cells = raw_excel.iloc[idx]
@@ -206,12 +203,15 @@ if final_file_target:
             'bag_number': str(row_cells[11]).strip(),   # L열
             'volume': str(row_cells[12]).strip(),       # M열
             'product_name': str(row_cells[14]).strip(), # O열
-            'quantity': pd.to_numeric(row_cells[16], errors='coerce') if not pd.isna(row_cells[16]) else 0, # Q열
+            'quantity': row_cells[16],                  # Q열 (아래에서 정수로 통합 변환 안전 패치)
             'production_date': p_date
         })
         
     df = pd.DataFrame(clean_data_list)
-    df['quantity'] = df['quantity'].astype(int)
+    
+    # [🚨 오너 지시 핵심 보완 프로토콜]: 수량 Q열 변환 시 IntCastingNaNError 버그 완치 패치
+    # 비어있거나 누락된 셀(NaN), 문자 찌꺼기들을 원천적으로 숫자 0으로 밀어버린 뒤 정수로 변환합니다.
+    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
     for col in ['item_code', 'category', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
@@ -236,7 +236,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 컴파일러 - 가격 제외]
+    # [📊 주차별 분리형 마스터 엑셀 컴파일러]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -311,14 +311,14 @@ if final_file_target:
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
-                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M열 타겟팅
+                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M열
                         
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q열 타겟팅
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q열
                         qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
-                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K열 타겟팅
-                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L열 타겟팅
+                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K열
+                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L열
                         
                         ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
@@ -541,7 +541,6 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
-                            # [🚨 명세 확정 마감 구역]: 스크린 전체 레이아웃 가격표 완전 증발 사양 고정 완료
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
