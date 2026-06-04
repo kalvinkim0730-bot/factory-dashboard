@@ -174,7 +174,6 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # usecols 완전 거세 후 정직하게 전체 엑셀 행렬 구조 로딩
     raw_df = pd.read_excel(final_file_target, header=None)
     
     start_row_idx = 0
@@ -185,16 +184,15 @@ if final_file_target:
             start_row_idx = idx + 1
             break
             
-    # [🚨 대표님 지정 오더 알파벳 열 절대 위치 1:1 직통 매핑 완공]
-    # A=0(코드), C=2(카테고리), F=5(가격표 유무), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
+    # [🚨 대표님 지정 오더 알파벳 열 1:1 무결점 매핑 정합 완료]
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
         row_cells = raw_df.iloc[idx]
         if len(row_cells) < 21:
             continue
             
-        p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
-        if pd.isna(p_date): # 문자열 헤더라인 터짐 완벽 차단 예외 처리
+        p_date = pd.to_datetime(row_cells[20], errors='coerce') 
+        if pd.isna(p_date): 
             continue
             
         clean_data_list.append({
@@ -211,38 +209,27 @@ if final_file_target:
         
     df = pd.DataFrame(clean_data_list)
     
-    # 🚨 [무한로딩 해제 코어 패치]: 카테고리와 정렬 대상이 되는 모든 열을 강제로 순수 str 형식으로 변환하여 데이터 정렬 충돌을 원천 차단합니다.
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].fillna('-').astype(str).str.strip()
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
         df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
 
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
-    
-    # 이제 형변환이 완료되어 데이터 충돌 없이 무조건 관통합니다.
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    current_weekday = today_dt.weekday() 
-    next_monday_dist = (7 - current_weekday) % 7 or 7
-    
-    target_next_monday = (today_dt + timedelta(days=next_monday_dist)).replace(hour=23, minute=59, second=59)
-    second_monday_start = target_next_monday + timedelta(seconds=1)
-    target_second_monday = (second_monday_start + timedelta(days=6)).replace(hour=23, minute=59, second=59)
-    
-    df_1week = df[(df['production_date'] >= today_dt) & (df['production_date'] <= target_next_monday)].copy()
-    df_2weeks = df[(df['production_date'] >= second_monday_start) & (df['production_date'] <= target_second_monday)].copy()
+    # 🚨 [날짜 족쇄 해제 패치]: 특정 주차 범위 제한 필터를 전면 철거하고, 엑셀에 적혀있는 모든 행을 안전하게 전량 노출시킵니다.
+    df_all_records = df.copy()
     
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 컴파일러]
+    # [📊 마스터 엑셀 컴파일러 다운로드 센터]
     # ---------------------------------------------------------------------
-    def generate_premium_split_excel(df_w1, df_w2):
+    def generate_premium_excel(target_df):
         output = io.BytesIO()
         wb = Workbook()
         ws = wb.active
-        ws.title = "주차별_생산라인업"
+        ws.title = "생산라인업_종합계획"
         ws.views.sheetView[0].showGridLines = True
         
         font_main_title = Font(name="Malgun Gothic", size=14, bold=True, color="FFFFFF")
@@ -250,7 +237,7 @@ if final_file_target:
         font_data = Font(name="Malgun Gothic", size=10)
         font_group = Font(name="Malgun Gothic", size=11, bold=True, color="0f172a")
         
-        fill_week_title = PatternFill(start_color="0369a1", end_color="0369a1", fill_type="solid")
+        fill_main_title = PatternFill(start_color="0369a1", end_color="0369a1", fill_type="solid")
         fill_header = PatternFill(start_color="334155", end_color="334155", fill_type="solid")
         fill_group = PatternFill(start_color="f8fafc", end_color="f8fafc", fill_type="solid")
         
@@ -262,68 +249,60 @@ if final_file_target:
         
         headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "Bag#", "가격표 유무", "특기사항 1", "특기사항 2"]
         categories_order = ["skin", "body", "hair", "기타 카테고리"]
-        current_row_idx = 1
+        r_idx = 1
         
-        def write_week_block(ws, target_df, week_label_text, start_row):
-            r_idx = start_row
-            ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
-            title_cell = ws.cell(row=r_idx, column=1)
-            title_cell.value = week_label_text
-            title_cell.font = font_main_title; title_cell.fill = fill_week_title; title_cell.alignment = align_center
-            ws.row_dimensions[r_idx].height = 35
-            r_idx += 1
-            
-            for col_num, h_text in enumerate(headers, 1):
-                h_cell = ws.cell(row=r_idx, column=col_num, value=h_text)
-                h_cell.font = font_header; h_cell.fill = fill_header; h_cell.alignment = align_center; h_cell.border = border_all
-            ws.row_dimensions[r_idx].height = 25
-            r_idx += 1
-            
-            for cate in categories_order:
-                cate_df = target_df[target_df['category'].str.lower().str.contains(cate)] if cate != "기타 카테고리" else target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
-                if not cate_df.empty:
-                    ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
-                    g_cell = ws.cell(row=r_idx, column=1, value=f"🌿 {cate.upper()} CARE LINEUP")
-                    g_cell.font = font_group; g_cell.fill = fill_group; g_cell.alignment = align_left
-                    for c_num in range(1, 12):
-                        ws.cell(row=r_idx, column=c_num).border = border_all
-                    ws.row_dimensions[r_idx].height = 24
+        ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
+        title_cell = ws.cell(row=r_idx, column=1, value="🗓️ FINE FORMULATION 생산 스케줄 라인업 종합 계획")
+        title_cell.font = font_main_title; title_cell.fill = fill_main_title; title_cell.alignment = align_center
+        ws.row_dimensions[r_idx].height = 35
+        r_idx += 1
+        
+        for col_num, h_text in enumerate(headers, 1):
+            h_cell = ws.cell(row=r_idx, column=col_num, value=h_text)
+            h_cell.font = font_header; h_cell.fill = fill_header; h_cell.alignment = align_center; h_cell.border = border_all
+        ws.row_dimensions[r_idx].height = 25
+        r_idx += 1
+        
+        for cate in categories_order:
+            cate_df = target_df[target_df['category'].str.lower().str.contains(cate)] if cate != "기타 카테고리" else target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
+            if not cate_df.empty:
+                ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
+                g_cell = ws.cell(row=r_idx, column=1, value=f"🌿 {cate.upper()} CARE LINEUP")
+                g_cell.font = font_group; g_cell.fill = fill_group; g_cell.alignment = align_left
+                for c_num in range(1, 12): ws.cell(row=r_idx, column=c_num).border = border_all
+                ws.row_dimensions[r_idx].height = 24
+                r_idx += 1
+                
+                for _, r in cate_df.iterrows():
+                    p_code = extract_pure_6_code(r['item_code'])
+                    memo_vals = saved_notes.get(p_code, ("", ""))
+                    
+                    ws.cell(row=r_idx, column=1, value=r['category'])
+                    ws.cell(row=r_idx, column=3, value=r['item_code'])
+                    ws.cell(row=r_idx, column=4, value=r['product_name'])
+                    ws.cell(row=r_idx, column=5, value=r['volume'])     
+                    qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']); qty_cell.number_format = '#,##0'; qty_cell.alignment = align_right
+                    ws.cell(row=r_idx, column=7, value=r['po_number'])  
+                    ws.cell(row=r_idx, column=8, value=r['bag_number']) 
+                    ws.cell(row=r_idx, column=9, value=r['price_tag'])  
+                    ws.cell(row=r_idx, column=10, value=memo_vals[0]).alignment = align_left
+                    ws.cell(row=r_idx, column=11, value=memo_vals[1]).alignment = align_left
+                    
+                    for c_idx in range(1, 12):
+                        c_cell = ws.cell(row=r_idx, column=c_idx); c_cell.font = font_data; c_cell.border = border_all
+                        if c_idx not in [4, 6, 10, 11]: c_cell.alignment = align_center
+                        elif c_idx == 1: c_cell.alignment = align_center
+                            
+                    ws.row_dimensions[r_idx].height = 35
+                    img_path = f"{p_code}.png"
+                    if os.path.exists(img_path):
+                        try:
+                            pil_img = PILImage.open(img_path); pil_img.thumbnail((50, 45))
+                            img_stream = io.BytesIO(); pil_img.save(img_stream, format="PNG"); img_stream.seek(0)
+                            xl_img = OpenpyxlImage(img_stream); ws.add_image(xl_img, f"B{r_idx}")
+                        except: pass
                     r_idx += 1
                     
-                    for _, r in cate_df.iterrows():
-                        p_code = extract_pure_6_code(r['item_code'])
-                        memo_vals = saved_notes.get(p_code, ("", ""))
-                        
-                        ws.cell(row=r_idx, column=1, value=r['category'])
-                        ws.cell(row=r_idx, column=3, value=r['item_code'])
-                        ws.cell(row=r_idx, column=4, value=r['product_name'])
-                        ws.cell(row=r_idx, column=5, value=r['volume'])     
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']); qty_cell.number_format = '#,##0'; qty_cell.alignment = align_right
-                        ws.cell(row=r_idx, column=7, value=r['po_number'])  
-                        ws.cell(row=r_idx, column=8, value=r['bag_number']) 
-                        ws.cell(row=r_idx, column=9, value=r['price_tag'])  
-                        ws.cell(row=r_idx, column=10, value=memo_vals[0]).alignment = align_left
-                        ws.cell(row=r_idx, column=11, value=memo_vals[1]).alignment = align_left
-                        
-                        for c_idx in range(1, 12):
-                            c_cell = ws.cell(row=r_idx, column=c_idx); c_cell.font = font_data; c_cell.border = border_all
-                            if c_idx not in [4, 6, 10, 11]: c_cell.alignment = align_center
-                            elif c_idx == 1: c_cell.alignment = align_center
-                                
-                        ws.row_dimensions[r_idx].height = 35
-                        img_path = f"{p_code}.png"
-                        if os.path.exists(img_path):
-                            try:
-                                pil_img = PILImage.open(img_path); pil_img.thumbnail((50, 45))
-                                img_stream = io.BytesIO(); pil_img.save(img_stream, format="PNG"); img_stream.seek(0)
-                                xl_img = OpenpyxlImage(img_stream); ws.add_image(xl_img, f"B{r_idx}")
-                            except: pass
-                        r_idx += 1
-            return r_idx + 2
-            
-        next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 라인업 계획 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
-        write_week_block(ws, df_2weeks, f"🗓️ 2주 차 생산 라인업 계획 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
-        
         for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 25), ('K', 25)]:
             ws.column_dimensions[l].width = w
         wb.save(output)
@@ -332,8 +311,8 @@ if final_file_target:
     with st.sidebar:
         st.markdown("---")
         st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
-        split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
-        st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+        split_excel_bytes = generate_premium_excel(df_all_records)
+        st.download_button(label="📊 생산 마스터 종합 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Master_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     # 디자인 프론트엔드 스타일 마감 구역
     st.markdown("""
@@ -366,7 +345,6 @@ if final_file_target:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            # [🚨 대표님 명세 100% 부합화 대완공]: 가독성 극대화 레이아웃 완성
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -431,8 +409,7 @@ if final_file_target:
                             st.rerun()
                         st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
 
-    render_schedule_grid(df_1week, "📅 1주 차 생산 스케줄 대쉬보드", "w1")
-    render_schedule_grid(df_2weeks, "📅 2주 차 생산 스케줄 대쉬보드", "w2")
+    render_schedule_grid(df_all_records, "📊 전체 등록 생산 스케줄 라인업", "all_lines")
 
 else:
     st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
