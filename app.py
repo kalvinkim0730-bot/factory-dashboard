@@ -12,7 +12,8 @@ import base64
 SAVED_EXCEL_PATH = "permanent_production_schedule.xlsx"
 NOTES_DB_PATH = "production_notes.txt"
 MASTER_PASSWORD = "Fineformulation"
-ENTRY_SECURITY_CODE = "1234"  # [대표님 지정 핵심 보안 코드]
+ENTRY_SECURITY_CODE = "1234"      # [대표님 지정 핵심 보안 코드]
+SESSION_TIMEOUT_SEC = 300          # [대표님 지정: 열람 유효시간 5분 (300초) 칼마감]
 
 # [오너 지시 정규식 핵심 축]: 띄어쓰기, 언더바 다 무시하고 오직 앞자리 순수 6자리 코드만 정밀 추출
 def extract_pure_6_code(text):
@@ -35,22 +36,64 @@ def get_saved_local_image_base64(pure_code):
             return None
     return None
 
+# ---------------------------------------------------------------------
+# [📝 특기사항 1, 2 멀티 메모리 영구 저장 엔진]
+# ---------------------------------------------------------------------
+def load_production_notes():
+    notes = {}
+    if os.path.exists(NOTES_DB_PATH):
+        try:
+            with open(NOTES_DB_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    if "::" in line:
+                        parts = line.split("::", 2)
+                        code = parts[0].strip()
+                        memo1 = parts[1].strip() if len(parts) > 1 else ""
+                        memo2 = parts[2].strip() if len(parts) > 2 else ""
+                        notes[code] = (memo1, memo2)
+        except Exception:
+            pass
+    return notes
+
+def save_production_note(pure_code, memo1, memo2):
+    notes = load_production_notes()
+    notes[pure_code] = (memo1.strip(), memo2.strip())
+    try:
+        with open(NOTES_DB_PATH, "w", encoding="utf-8") as f:
+            for code, values in notes.items():
+                if values[0] or values[1]:
+                    f.write(f"{code}::{values[0]}::{values[1]}\n")
+    except Exception:
+        pass
+
 # =========================================================================
 # 2. 스트림릿 웹 대시보드 UI 레이아웃 구성
 # =========================================================================
 st.set_page_config(layout="wide", page_title="생산 스케줄 비주얼 대시보드")
 
 # ---------------------------------------------------------------------
-# [🚨 오너 지시 핵심 조항: 1234 게이트웨이 철통 보안 스크린 가동]
+# [🚨 실시간 5분 타임아웃 세션 폭파 엔진]
 # ---------------------------------------------------------------------
 if "app_unlocked" not in st.session_state:
     st.session_state["app_unlocked"] = False
+if "unlock_time" not in st.session_state:
+    st.session_state["unlock_time"] = None
 
+if st.session_state["app_unlocked"] and st.session_state["unlock_time"] is not None:
+    elapsed_time = time.time() - st.session_state["unlock_time"]
+    if elapsed_time > SESSION_TIMEOUT_SEC:
+        st.session_state["app_unlocked"] = False
+        st.session_state["unlock_time"] = None
+        st.toast("⚠️ 보안 유지를 위해 열람 유효시간(5분)이 만료되어 자동 잠금되었습니다.")
+        time.sleep(1)
+        st.rerun()
+
+# ---------------------------------------------------------------------
+# [🔒 게이트웨이 정문 차단막 인터페이스]
+# ---------------------------------------------------------------------
 if not st.session_state["app_unlocked"]:
-    # 앱 진입 전 전체 화면을 잠그는 보안 정문 레이아웃 빌딩
     st.markdown("""
         <style>
-            /* 메인 대시보드 배경 은닉 프로토콜 */
             .stApp { background-color: #0f172a !important; }
             .security-gate {
                 text-align: center;
@@ -70,35 +113,40 @@ if not st.session_state["app_unlocked"]:
     st.markdown("""
         <div class="security-gate">
             <h1 style="color: #38bdf8; font-size: 28px; font-weight: bold; margin-bottom: 10px;">🔒 FINE FORMULATION</h1>
-            <p style="color: #94a3b8; font-size: 15px; margin-bottom: 25px;">본 시스템은 기업 기밀 자산 보호 구역입니다.<br>계정 관리자가 부여한 보안 코드를 입력하십시오.</p>
+            <p style="color: #94a3b8; font-size: 15px; margin-bottom: 25px;">본 시스템은 기업 기밀 자산 보호 구역입니다.<br>열람 유효시간은 보안 정책에 따라 <b>5분</b>으로 제한됩니다.</p>
         </div>
     """, unsafe_allow_html=True)
     
-    # 정중앙 집중형 보안 코드 입력 패널 체결
     cols = st.columns([1, 2, 1])
     with cols[1]:
-        input_gate_code = st.text_input("🔑 보안 코드 입력 (Security Code)", type="password", key="gate_code_input", help="진입 코드를 입력 후 Enter를 누르십시오.")
+        input_gate_code = st.text_input("🔑 보안 코드 입력 (Security Code)", type="password", key="gate_code_input")
         
         if input_gate_code == ENTRY_SECURITY_CODE:
             st.session_state["app_unlocked"] = True
-            st.success("🔓 자격 증명이 확인되었습니다. 시스템을 개방합니다.")
+            st.session_state["unlock_time"] = time.time()
+            st.success("🔓 자격 증명이 확인되었습니다. 시스템을 5분간 개방합니다.")
             time.sleep(0.5)
             st.rerun()
         elif input_gate_code != "":
             st.error("❌ 보안 코드가 올바르지 않습니다. 접근이 거부되었습니다.")
             
-    st.stop() # 코드가 틀리거나 입력 전이면 하단 마스터 소스코드 실행을 완벽하게 차단
+    st.stop()
 
 # ---------------------------------------------------------------------
-# [🔓 게이트웨이 통과 시 해제되는 오리지널 마스터 대시보드 엔진 인프라]
+# [🔓 마스터 대시보드 인프라 핵심]
 # ---------------------------------------------------------------------
 st.title("🏭 생산 스케줄 마스터 데이터 대시보드")
+
+current_elapsed = time.time() - st.session_state["unlock_time"]
+remaining_sec = max(0, int(SESSION_TIMEOUT_SEC - current_elapsed))
+rem_min = remaining_sec // 60
+rem_sec = remaining_sec % 60
 
 has_saved_file = os.path.exists(SAVED_EXCEL_PATH)
 final_file_target = SAVED_EXCEL_PATH if os.path.exists(SAVED_EXCEL_PATH) else None
 
-# 사이드바 통합 제어 센터 배치
 with st.sidebar:
+    st.markdown(f'<div style="color:#ecc94b; font-size:15px; font-weight:bold; background-color:#7b341e; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">⏱️ 보안 열람 남은 시간: {rem_min}분 {rem_sec}초</div>', unsafe_allow_html=True)
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어 센터</div>', unsafe_allow_html=True)
     
     if has_saved_file:
@@ -123,6 +171,7 @@ with st.sidebar:
     st.markdown("---")
     if st.button("🔒 대시보드 즉시 잠금 (로그아웃)", use_container_width=True):
         st.session_state["app_unlocked"] = False
+        st.session_state["unlock_time"] = None
         st.rerun()
 
 if final_file_target:
@@ -157,7 +206,8 @@ if final_file_target:
     
     df_1week = df[(df['production_date'] >= today_dt) & (df['production_date'] <= target_next_monday)]
     df_2weeks = df[(df['production_date'] >= second_monday_start) & (df['production_date'] <= target_second_monday)]
-    df_filtered_total = pd.concat([df_1week, df_2weeks]).copy()
+    
+    saved_notes = load_production_notes()
 
     with st.sidebar:
         st.markdown("---")
@@ -241,7 +291,7 @@ if final_file_target:
                             progress_bar.progress(int((i + 1) / total_items * 100))
                         
                         status_placeholder.empty()
-                        st.markdown(f'<div style="color:#4ade80; font-size:16px; font-weight:bold; background-color:#064e3b; padding:12px; border-radius:8px; margin-top:10px;">🎯 백업 마감 결과: 총 {sync_success_count}개 품목의 공식 정형 썸네일 다른 이름 저장 성공!</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div style="color:#4ade80; font-size:16px; font-weight:bold; background-color:#064e3b; padding:12px; border-radius:8px; margin-top:10px;">🎯 백업 마감 결과: 총 {sync_success_count}개 품목의 공식 정형 썸네일 다른 이름 저장 성공! 바로 F5를 눌러 확인하십시오.</div>', unsafe_allow_html=True)
                     else:
                         status_placeholder.empty()
                         st.error("❌ 트렐로 API 통신 세션 인증 실패.")
@@ -252,11 +302,8 @@ if final_file_target:
                 st.error("❌ 데이터 제어 승인 암호가 일치하지 않습니다.")
 
     # ---------------------------------------------------------------------
-    # 5. 디자인 격자 템플릿 CSS 명세
+    # 5. 디자인 격자 프론트엔드 스타일 마감 구역
     # ---------------------------------------------------------------------
-    card_container_style = "background-color:#1e2530 !important; border:1px solid #2d3748 !important; border-radius:14px !important; padding:18px !important; box-shadow:0 10px 15px -3px rgba(0,0,0,0.4) !important;"
-    text_base = "margin:0px !important; padding:0px !important; text-align:left !important; line-height:1.4 !important;"
-
     st.markdown("""
         <style>
             .owner-square-frame {
@@ -279,84 +326,87 @@ if final_file_target:
                 height: auto !important;
                 object-fit: contain !important;
             }
+            .owner-info-card-wrap {
+                background-color: #1e2530 !important; 
+                border: 1px solid #2d3748 !important; 
+                border-radius: 14px !important; 
+                padding: 18px !important; 
+                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important;
+                margin-bottom: 8px !important;
+            }
+            .owner-text-row {
+                margin: 0px !important; 
+                padding: 0px !important; 
+                text-align: left !important; 
+                line-height: 1.4 !important;
+            }
+            /* 입력창 정밀 정돈용 마크다운 패치 */
+            div[data-testid="stTextInput"] { margin-top: 4px !important; padding: 0px !important; }
+            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
+            div[data-testid="stTextInput"] input:focus { border-color: #38bdf8 !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.subheader(f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})")
-    
-    if not df_1week.empty:
-        for category_name, group_df in df_1week.groupby('category', sort=False):
-            st.markdown(f'<div style="font-size:20px; font-weight:bold; color:#38bdf8; padding:6px 12px; background-color:#0f172a; border-left:5px solid #38bdf8; border-radius:4px; margin-top:25px; margin-bottom:15px;">📦 {category_name} care</div>', unsafe_allow_html=True)
-            cols = st.columns(6)
-            for idx, row in group_df.reset_index().iterrows():
-                excel_code = row['item_code']
-                pure_excel_code = extract_pure_6_code(excel_code)
-                
-                with cols[idx % 6]:
-                    local_base64_data = get_saved_local_image_base64(pure_excel_code)
+    # 📥 주차별 그리드 및 데이터 맵 드로잉 매커니즘 구조 정의
+    def render_schedule_grid(target_df, title_label, section_prefix):
+        st.markdown("---")
+        st.subheader(title_label)
+        
+        if not target_df.empty:
+            for category_name, group_df in target_df.groupby('category', sort=False):
+                st.markdown(f'<div style="font-size:20px; font-weight:bold; color:#38bdf8; padding:6px 12px; background-color:#0f172a; border-left:5px solid #38bdf8; border-radius:4px; margin-top:25px; margin-bottom:15px;">📦 {category_name} care</div>', unsafe_allow_html=True)
+                cols = st.columns(6)
+                for idx, row in group_df.reset_index().iteritems() if hasattr(group_df.reset_index(), 'iteritems') else group_df.reset_index().iterrows():
+                    excel_code = row['item_code']
+                    pure_excel_code = extract_pure_6_code(excel_code)
                     
-                    if local_base64_data:
-                        st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
-                    else:
-                        st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
-                    
-                    st.html(f"""
-                        <div style="{card_container_style}">
-                            <div style="{text_base} font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
-                            <div style="{text_base} font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
-                            <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
-                            <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
-                                <span style="{text_base} font-size:14px !important; color:#718096 !important;">가격표: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
-                                <span style="{text_base} font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
+                    with cols[idx % 6]:
+                        local_base64_data = get_saved_local_image_base64(pure_excel_code)
+                        
+                        if local_base64_data:
+                            st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
+                        else:
+                            st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
+                        
+                        st.html(f"""
+                            <div class="owner-info-card-wrap">
+                                <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
+                                <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
+                                <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
+                                    <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">가격표: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
+                                    <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
+                                </div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
+                                <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
+                                    <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
+                                    <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
+                                </div>
                             </div>
-                            <div style="{text_base} font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                            <div style="{text_base} font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
-                            <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !items:center !important; margin-bottom:15px !important;">
-                                <span style="{text_base} font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
-                                <span style="{text_base} font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
-                            </div>
-                        </div>
-                    """)
-                    st.markdown('<div style="margin-bottom:25px;"></div>', unsafe_allow_html=True)
+                        """)
+                        
+                        # [🚨 오너 지시 핵심 조항 조립]: 특기사항 입력을 위한 멀티 인풋 윈도우 배선 개설
+                        memo_tuple = saved_notes.get(pure_excel_code, ("", ""))
+                        
+                        # 1번 특기사항 창 (예: 생산 공정 및 원료 특이사항용)
+                        key_m1 = f"input_m1_{section_prefix}_{pure_excel_code}_{idx}"
+                        user_m1 = st.text_input(label=f"T1_{pure_excel_code}", value=memo_tuple[0], key=key_m1, placeholder="📋 특기사항 1 입력 후 Enter", label_visibility="collapsed")
+                        
+                        # 2번 특기사항 창 (예: 포장 부자재 및 출고 지시사항용)
+                        key_m2 = f"input_m2_{section_prefix}_{pure_excel_code}_{idx}"
+                        user_m2 = st.text_input(label=f"T2_{pure_excel_code}", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
+                        
+                        # 두 인풋 필드 중 하나라도 변동이 실시간 포착되면 디스크 즉시 영구 동기화
+                        if user_m1 != memo_tuple[0] or user_m2 != memo_tuple[1]:
+                            save_production_note(pure_excel_code, user_m1, user_m2)
+                            st.rerun()
+                            
+                        st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
 
-    # [섹션 2] 2주 차 생산 라인업
-    st.markdown("---")
-    st.subheader(f"📅 2주 차 생산 스케줄 대쉬보드 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})")
-    
-    if not df_2weeks.empty:
-        for category_name, group_df in df_2weeks.groupby('category', sort=False):
-            st.markdown(f'<div style="font-size:20px; font-weight:bold; color:#38bdf8; padding:6px 12px; background-color:#0f172a; border-left:5px solid #38bdf8; border-radius:4px; margin-top:25px; margin-bottom:15px;">📦 {category_name} care</div>', unsafe_allow_html=True)
-            cols = st.columns(6)
-            for idx, row in group_df.reset_index().iterrows():
-                excel_code = row['item_code']
-                pure_excel_code = extract_pure_6_code(excel_code)
-                
-                with cols[idx % 6]:
-                    local_base64_data = get_saved_local_image_base64(pure_excel_code)
-                    
-                    if local_base64_data:
-                        st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
-                    else:
-                        st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
-                    
-                    st.html(f"""
-                        <div style="{card_container_style}">
-                            <div style="{text_base} font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
-                            <div style="{text_base} font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
-                            <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
-                            <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
-                                <span style="{text_base} font-size:14px !important; color:#718096 !important;">가격표: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
-                                <span style="{text_base} font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
-                            </div>
-                            <div style="{text_base} font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                            <div style="{text_base} font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
-                            <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !items:center !important; margin-bottom:15px !important;">
-                                <span style="{text_base} font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
-                                <span style="{text_base} font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
-                            </div>
-                        </div>
-                    """)
-                    st.markdown('<div style="margin-bottom:25px;"></div>', unsafe_allow_html=True)
+    # 1주 차 및 2주 차 통합 그리드 빌드 가동
+    render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", "w1")
+    render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", "w2")
+
 else:
     st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
