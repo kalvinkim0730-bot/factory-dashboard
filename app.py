@@ -137,6 +137,11 @@ with st.sidebar:
     st.markdown(f'<div style="color:#ffffff; font-size:15px; font-weight:bold; background-color:#0284c7; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">🟢 시스템 가동 중 (활동 중 자동 연장)</div>', unsafe_allow_html=True)
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어 센터</div>', unsafe_allow_html=True)
     
+    if has_saved_file:
+        st.markdown('<div style="color:#4ade80; font-size:14px; font-weight:bold; background-color:#064e3b; padding:10px; border-radius:8px; margin-bottom:15px;">🟢 스케줄 파일 연동 완료</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="color:#f87171; font-size:14px; font-weight:bold; background-color:#7f1d1d; padding:10px; border-radius:8px; margin-bottom:15px;">💡 마스터 엑셀 파일 업로드가 필요합니다.</div>', unsafe_allow_html=True)
+    
     input_password = st.text_input("🔓 데이터 제어 승인 암호", type="password", key="auth_pwd_input")
     is_authenticated = (input_password == MASTER_PASSWORD)
 
@@ -150,11 +155,6 @@ with st.sidebar:
         st.success("🚀 마스터 스케줄 파일 교체 성공!")
         time.sleep(1)
         st.rerun()
-        
-    if st.button("🔒 대시보드 즉시 잠금 (로그아웃)", use_container_width=True):
-        st.session_state["app_unlocked"] = False
-        st.session_state["unlock_time"] = None
-        st.rerun()
 
 if final_file_target:
     raw_df = pd.read_excel(final_file_target, header=None)
@@ -167,7 +167,7 @@ if final_file_target:
             start_row_idx = idx + 1
             break
             
-    # [🚨 오너 명세 절대 고정 배선 프로토콜]: 
+    # [🚨 절대 열 1:1 직통 매핑 배선 프로토콜 고정]
     # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), V=21(날짜)
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
@@ -175,7 +175,7 @@ if final_file_target:
         if len(row_cells) < 22:  # V열 범위 안전 확인
             continue
             
-        p_date = pd.to_datetime(row_cells[21], errors='coerce') # 🚨 [지시 반영] U열(20)이 아닌 V열(21)을 생산일자 타겟으로 전격 교체
+        p_date = pd.to_datetime(row_cells[21], errors='coerce') # V열 타겟팅 유지
         if pd.isna(p_date): 
             continue
             
@@ -201,18 +201,15 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # [🚨 1주차, 2주차 달력 기반 전격 분리 시스템 완공]
+    # [🚨 V열 생산계획 기준 주차 분리 알고리즘]
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
     
-    # 이번주 일요일 23:59:59 마감 기준선
     target_next_monday = (today_dt + timedelta(days=next_monday_dist)).replace(hour=23, minute=59, second=59)
     second_monday_start = target_next_monday + timedelta(seconds=1)
-    # 다음주 일요일 23:59:59 마감 기준선
     target_second_monday = (second_monday_start + timedelta(days=6)).replace(hour=23, minute=59, second=59)
     
-    # V열 날짜가 오늘 시점 이후이면서 정해진 주차 스코프에 도달하는지 기계적 분류
     df_1week = df[(df['production_date'] >= today_dt) & (df['production_date'] <= target_next_monday)].copy()
     df_2weeks = df[(df['production_date'] >= second_monday_start) & (df['production_date'] <= target_second_monday)].copy()
     
@@ -304,8 +301,8 @@ if final_file_target:
                         r_idx += 1
             return r_idx + 2
             
-        next_start_row = write_week_block(ws, df_w1, f"🗓️ 1주 차 생산 라인업 계획 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
-        write_week_block(ws, df_w2, f"🗓️ 2주 차 생산 라인업 계획 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
+        next_start_row = write_week_block(ws, df_w1, f"🗓️ 1주 차 생산 라인업 계획", current_row_idx)
+        write_week_block(ws, df_w2, f"🗓️ 2주 차 생산 라인업 계획", next_start_row)
         
         for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 25), ('K', 25)]:
             ws.column_dimensions[l].width = w
@@ -317,6 +314,58 @@ if final_file_target:
         st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
         st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
+        # 🚨 [대표님 오너 권한]: 사라졌던 트렐로 실물 이미지 동기화 버튼 구역 완벽 전격 부활
+        st.markdown("---")
+        st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업 센터</div>', unsafe_allow_html=True)
+        
+        if st.button("🔄 현재 스케줄 이미지 서버에 저장", use_container_width=True):
+            if is_authenticated:
+                sync_success_count = 0
+                status_placeholder = st.empty()
+                status_placeholder.info("🔄 마스터 엑셀에서 순수 6자리 코드 스캔 중...")
+                
+                target_pure_codes = []
+                for val in df['item_code'].dropna().unique():
+                    p_code = extract_pure_6_code(val)
+                    if p_code: target_pure_codes.append(p_code)
+                target_pure_codes = list(set(target_pure_codes))
+                
+                if len(target_pure_codes) > 0:
+                    TRELLO_API_KEY = st.secrets["TRELLO_API_KEY"]
+                    TRELLO_TOKEN = st.secrets["TRELLO_TOKEN"]
+                    TRELLO_BOARD_ID = st.secrets["TRELLO_BOARD_ID"]
+                    secured_headers = {"Authorization": f'OAuth oauth_consumer_key="{TRELLO_API_KEY}", oauth_token="{TRELLO_TOKEN}"', "User-Agent": "Mozilla/5.0"}
+                    
+                    url = f"https://api.trello.com/1/boards/{TRELLO_BOARD_ID}/cards"
+                    card_res = requests.get(url, headers=secured_headers, params={'key': TRELLO_API_KEY, 'token': TRELLO_TOKEN, 'attachments': 'true', 'limit': '1000'}, timeout=25)
+                    
+                    if card_res.status_code == 200:
+                        all_cards = card_res.json(); progress_bar = st.progress(0); total_items = len(target_pure_codes)
+                        for i, code_key in enumerate(target_pure_codes):
+                            code_key_clean = str(code_key).strip().upper(); trello_url = None
+                            status_placeholder.info(f"⏳ 이미지 매칭 중: [{code_key_clean}] ({i+1}/{total_items})")
+                            
+                            for card in all_cards:
+                                if code_key_clean in card.get('name', '').replace(" ", "").upper():
+                                    cover = card.get('cover', {})
+                                    if cover and cover.get('scaled'): trello_url = cover.get('scaled', [])[-1].get('url')
+                                    if not trello_url and card.get('attachments'):
+                                        trello_url = card['attachments'][0].get('url')
+                            if trello_url:
+                                try:
+                                    img_res = requests.get(trello_url, headers=secured_headers, timeout=12)
+                                    if img_res.status_code == 200:
+                                        with open(f"{code_key_clean}.png", "wb") as img_f: img_f.write(img_res.content)
+                                        sync_success_count += 1
+                                except: pass
+                            progress_bar.progress(int((i + 1) / total_items * 100))
+                        status_placeholder.empty()
+                        st.success(f"🎯 총 {sync_success_count}개 품목의 공식 썸네일 다운로드 성공!")
+                        time.sleep(1)
+                        st.rerun()
+            else:
+                st.error("❌ 승인 암호가 올바르지 않습니다.")
 
     # 디자인 프론트엔드 스타일 마감 구역
     st.markdown("""
@@ -344,7 +393,7 @@ if final_file_target:
                     for idx, row in group_df.reset_index(drop=True).iterrows():
                         excel_code = row['item_code']
                         
-                        # 🚨 [사진 미표출 해제 정밀 코드]: 6자리 코드 규격을 명확하게 추출하여 배선을 연결합니다.
+                        # 🚨 [정밀 매핑 코드 복구]: 순수 앞 6자리 코드로 가공하여 로컬 에셋 폴더와 다이렉트로 연결합니다.
                         pure_excel_code = extract_pure_6_code(excel_code)
                         
                         with cols[idx % 6]:
