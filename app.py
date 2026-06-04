@@ -142,7 +142,7 @@ if not st.session_state["app_unlocked"]:
 # [🔓 1234 통과 시 오픈되는 마스터 대시보드 코어]
 # ---------------------------------------------------------------------
 has_saved_file = os.path.exists(SAVED_EXCEL_PATH)
-final_file_target = SAVED_EXCEL_PATH if os.path.exists(SAVED_EXCEL_PATH) else None
+final_file_target = SAVED_EXCEL_PATH if has_saved_file else None
 
 with st.sidebar:
     st.markdown(f'<div style="color:#ffffff; font-size:15px; font-weight:bold; background-color:#0284c7; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">🟢 시스템 가동 중 (활동 중 자동 연장)</div>', unsafe_allow_html=True)
@@ -174,22 +174,22 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # usecols 완전 무력화 후 순수 행렬 로드
+    # usecols 완전 거세 후 날것의 전체 행렬 로딩
     raw_df = pd.read_excel(final_file_target, header=None)
     
-    # [🚨 블랙아웃 원천 진압 프로토콜]: 날짜 검증 예외 처리를 완벽하게 수립하여 루프 가동
+    # [🚨 대수술 완공]: 문자열 헤더나 빈 행이 발견되면 완벽하게 스킵 처리하는 절대 안전 가이드라인 수립
     clean_data_list = []
     for idx in range(len(raw_df)):
         row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 21:  # U열 범위 안전 확인
+        if len(row_cells) < 21:  # U열 가이드라인 인덱스 크기 방어
             continue
             
         p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
-        if pd.isna(p_date): # 🚨 [핵심 완공 조항] 제목 줄이나 빈 데이터가 들어와도 절대 터지지 않고 자연스럽게 스킵 패스합니다.
+        if pd.isna(p_date): # 날짜 형식 문자열이 존재하지 않으면 첫 헤더나 문자열 줄이므로 완벽하게 스킵 패스
             continue
             
-        # [🚨 대표님 지정 오더 알파벳 열 절대 인덱스 1:1 직통 매핑]
-        # A=0(코드), C=2(카테고리), F=5(가격표 유무), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량)
+        # [🚨 대표님 지정 오더 알파벳 열 절대 위치 1:1 직통 동기화 배선]
+        # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량)
         clean_data_list.append({
             'item_code': str(row_cells[0]).strip(),     
             'category': str(row_cells[2]).strip(),      
@@ -205,7 +205,7 @@ if final_file_target:
     df = pd.DataFrame(clean_data_list)
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 공백 정화 처리 명세
+    # 공백 정화 대치 사양 고정
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
         df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
@@ -357,7 +357,7 @@ if final_file_target:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            # [🚨 대표님 명세 100% 부합화 대완공]: 가독성 극대화 레이아웃 완성
+                            # 가격표 유무 독립 줄바꿈 디자인 연동
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -405,7 +405,7 @@ if final_file_target:
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                 <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
                                     <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
                                     <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
@@ -421,6 +421,9 @@ if final_file_target:
                             save_production_note(pure_excel_code, user_m1, user_m2)
                             st.rerun()
                         st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
+
+    render_schedule_grid(df_1week, "📅 1주 차 생산 스케줄 대쉬보드", "w1")
+    render_schedule_grid(df_2weeks, "📅 2주 차 생산 스케줄 대쉬보드", "w2")
 
 else:
     st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
