@@ -174,18 +174,20 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # 🚨 [인덱스 꼬임 주범 검거 및 사살]: 행을 임의로 잘라버리는 contains 소스 코드를 전면 폐기하고 무조건 날것으로 읽어옵니다.
+    # usecols 완전 영구 삭제, 날것의 전체 엑셀 데이터를 정직하게 로드
     raw_df = pd.read_excel(final_file_target, header=None)
-    
-    # 🚨 [대표님 오더 지정 100% 무결점 매핑]: 
-    # 알파벳 절대 규격 매핑 테이블 강제 바인딩 (A=0, C=2, F=5, K=10, L=11, M=12, O=14, Q=16, U=20)
+    if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
+        raw_df = raw_df.iloc[1:]
+        
+    # [🚨 오너 지시 절대 열 대조 알고리즘 완공 구역]:
+    # 알파벳 순수 열 고정: A=0, C=2, F=5, K=10, L=11, M=12, O=14, Q=16, U=20
     clean_data_list = []
     for idx in range(len(raw_df)):
-        row_cells = raw_excel.iloc[idx] if 'raw_excel' in locals() else raw_df.iloc[idx]
-        if len(row_cells) < 21:  # U열 범위 이탈 방어막
+        row_cells = raw_df.iloc[idx]  # 🚨 오타가 터졌던 유령 변수명을 완벽 삭제하고 새롭게 로드된 raw_df로 고정
+        if len(row_cells) < 21:
             continue
             
-        # U열(20번)이 생산일자 형식인 것만 온전하게 골라내어 연동합니다.
+        # U열(20번) 날짜 형식이 박혀있는 정상 생산 행들만 데이터 스코프로 인정
         p_date = pd.to_datetime(row_cells[20], errors='coerce')
         if pd.isna(p_date):
             continue
@@ -203,12 +205,14 @@ if final_file_target:
         })
         
     df = pd.DataFrame(clean_data_list)
+    
+    # 0개나 수십억 개로 튀는 데이터 캐스팅 충돌 원천 방어 패치
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 🚨 [오너 지시 예외 처리]: nan, 공백, 빈칸, 기호가 포착되면 원천적으로 대표님 지시대로 '-' 강제 치환
+    # 🚨 [공백 왜곡 차단 마감]: nan, 빈 데이터가 포착되면 무조건 대표님 지시대로 '-' 강제 치환
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
-        df[col] = df[col].apply(lambda x: str(x).strip() if pd.notna(x) else '-')
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
+        df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
     
     # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
@@ -239,6 +243,7 @@ if final_file_target:
         ws.title = "주차별_생산라인업"
         ws.views.sheetView[0].showGridLines = True
         
+        # 디자인 서식 프로토콜 설정
         font_main_title = Font(name="Malgun Gothic", size=14, bold=True, color="FFFFFF")
         font_header = Font(name="Malgun Gothic", size=11, bold=True, color="FFFFFF")
         font_data = Font(name="Malgun Gothic", size=10)
@@ -302,6 +307,7 @@ if final_file_target:
                         ws.cell(row=r_idx, column=7, value=r['po_number'])  
                         ws.cell(row=r_idx, column=8, value=r['bag_number']) 
                         ws.cell(row=r_idx, column=9, value=r['price_tag'])  
+                        
                         ws.cell(row=r_idx, column=10, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=11, value=memo_vals[1]).alignment = align_left
                         
@@ -362,7 +368,7 @@ if final_file_target:
                     secured_headers = {"Authorization": f'OAuth oauth_consumer_key="{TRELLO_API_KEY}", oauth_token="{TRELLO_TOKEN}"', "User-Agent": "Mozilla/5.0"}
                     
                     url = f"https://api.trello.com/1/boards/{TRELLO_BOARD_ID}/cards"
-                    card_res = requests.get(url, headers=secured_headers, params={'key': TRELLO_API_KEY, 'token': TRELLO_TOKEN, 'attachments': 'true', 'limit': '1000'}, timeout=25)
+                    card_res = requests.get(url, headers=secured_headers, params=params if 'params' in locals() else {'key': TRELLO_API_KEY, 'token': TRELLO_TOKEN, 'attachments': 'true', 'limit': '1000'}, timeout=25)
                     if card_res.status_code == 200:
                         all_cards = card_res.json(); progress_bar = st.progress(0); total_items = len(target_pure_codes)
                         for i, code_key in enumerate(target_pure_codes):
@@ -412,7 +418,7 @@ if final_file_target:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            # [🚨 오너 지시 핵심 반영]: 용량 단독 줄바꿈 마감 프로토콜 체결
+                            # [🚨 명세 완전 정합 조립 마감]: 가격표(F열), 용량(M열 단독줄), PO#(K열), Bag#(L열), 수량(Q열) 정상 표출
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
