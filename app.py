@@ -174,28 +174,49 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # [🚨 오너 지시 핵심 수술 구역]: 원본 엑셀 로드 범위를 A~U칼럼 전체로 확장 명시
-    raw_df = pd.read_excel(final_file_target, usecols="A:U", header=None)
-    if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
-        raw_df = raw_df.iloc[1:]
+    # 헤더 인식이 꼬여 밀리는 버그를 원천 봉쇄하기 위해 헤더 자동 지정을 해제(header=None)합니다.
+    raw_excel = pd.read_excel(final_file_target, header=None)
+    
+    # "일정, 코드, 카테고리" 등 문자가 들어간 진짜 첫 행(제목 줄)의 위치를 역추적해 데이터 시작점을 잡습니다.
+    start_row_idx = 0
+    for idx, row in raw_excel.iterrows():
+        row_str = row.astype(str).tolist()
+        if any(keyword in "".join(row_str) for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
+            start_row_idx = idx + 1
+            break
+            
+    # [🚨 오너 지시 칼럼 대조 하드코딩 수술 최종 완공 구역]:
+    # 알파벳 절대 열 위치 명세표: A=0(코드), C=2(카테고리), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(생산일자)
+    clean_data_list = []
+    for idx in range(start_row_idx, len(raw_excel)):
+        row_cells = raw_excel.iloc[idx]
+        if len(row_cells) < 21:  # U열까지 도달하지 못하는 불완전한 로우 스킵
+            continue
+            
+        p_date_raw = row_cells[20] # U열
+        p_date = pd.to_datetime(p_date_raw, errors='coerce')
+        if pd.isna(p_date): # 날짜가 없는 빈 행 탈거
+            continue
+            
+        clean_data_list.append({
+            'item_code': str(row_cells[0]).strip(),     # A열
+            'category': str(row_cells[2]).strip(),      # C열
+            'po_number': str(row_cells[10]).strip(),    # K열
+            'bag_number': str(row_cells[11]).strip(),   # L열
+            'volume': str(row_cells[12]).strip(),       # M열
+            'product_name': str(row_cells[14]).strip(), # O열
+            'quantity': pd.to_numeric(row_cells[16], errors='coerce') if not pd.isna(row_cells[16]) else 0, # Q열
+            'production_date': p_date
+        })
         
-    # [🚨 오너 지시 타겟 칼럼 정밀 대조 배선 프로토콜]:
-    # 가격(Price) 전면 탈거 / K=10(PO#), L=11(Bag#), M=12(용량), Q=16(수량), U=20(날짜)
-    df = pd.DataFrame()
-    df['item_code'] = raw_df.iloc[:, 0].fillna('-').astype(str).str.strip()
-    df['category'] = raw_df.iloc[:, 2].fillna('기타 카테고리').astype(str).str.strip()
+    df = pd.DataFrame(clean_data_list)
+    df['quantity'] = df['quantity'].astype(int)
     
-    df['po_number'] = raw_df.iloc[:, 10].fillna('-').astype(str).str.strip()   # K칼럼 (인덱스 10)
-    df['bag_number'] = raw_df.iloc[:, 11].fillna('-').astype(str).str.strip()  # L칼럼 (인덱스 11)
-    df['volume'] = raw_df.iloc[:, 12].fillna('-').astype(str).str.strip()      # M칼럼 (인덱스 12)
-    
-    df['product_name'] = raw_df.iloc[:, 14].fillna('-').astype(str).str.strip()
-    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 16], errors='coerce').fillna(0).astype(int) # Q칼럼 (인덱스 16)
-    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce') # U칼럼 (인덱스 20)
-    
-    df = df.dropna(subset=['production_date'])
-    
-    # 주차와 카테고리 안에서 동일 코드 밀착 집결 알고리즘
+    # 텍스트 마찰 복구 및 특수nan 필터 처리
+    for col in ['item_code', 'category', 'po_number', 'bag_number', 'volume', 'product_name']:
+        df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
+
+    # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -215,7 +236,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 컴파일러 - 가격 제외 명세 반영]
+    # [📊 주차별 분리형 마스터 엑셀 컴파일러 - 가격 완전 배제 버전]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -240,7 +261,6 @@ if final_file_target:
         thin_side = Side(border_style="thin", color="cbd5e1")
         border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         
-        # 대표님 명세: 가격표 유무 칼럼을 제외하고 특기사항을 밀착 결합한 9대 마스터 칼럼 정의
         headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "Bag#", "특기사항 1", "특기사항 2"]
         categories_order = ["skin", "body", "hair", "기타 카테고리"]
         current_row_idx = 1
@@ -292,14 +312,14 @@ if final_file_target:
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
-                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M칼럼 직통
+                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M칼럼 타겟팅
                         
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q칼럼 직통
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q칼럼 타겟팅
                         qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
-                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K칼럼 직통
-                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L칼럼 직통
+                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K칼럼 타겟팅
+                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L칼럼 타겟팅
                         
                         ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
@@ -388,7 +408,7 @@ if final_file_target:
                     
                     secured_headers = {
                         "Authorization": f'OAuth oauth_consumer_key="{TRELLO_API_KEY}", oauth_token="{TRELLO_TOKEN}"',
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
                     }
                     
                     status_placeholder.info(f"🛰️ 오리지널 썸네일 수집 허브 연동 시작...")
@@ -522,7 +542,7 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
-                            # [🚨 대표님 핵심 마감]: 대시보드 스크린에서 가격표 유무를 전면 철거하고 순수하게 뼈대만 출력
+                            # [🚨 대표님 핵심 수정 반영]: 가격 전면 제외 스크린 표출 사양 고정
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -597,4 +617,5 @@ if final_file_target:
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", "w2")
 
 else:
+    # 마스터 데이터 미감지 시 빈 레이아웃 안내 고정 문구 출력
     st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
