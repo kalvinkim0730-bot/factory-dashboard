@@ -148,6 +148,11 @@ with st.sidebar:
     st.markdown(f'<div style="color:#ffffff; font-size:15px; font-weight:bold; background-color:#0284c7; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">🟢 시스템 가동 중 (활동 중 자동 연장)</div>', unsafe_allow_html=True)
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어 센터</div>', unsafe_allow_html=True)
     
+    if has_saved_file:
+        st.markdown('<div style="color:#4ade80; font-size:14px; font-weight:bold; background-color:#064e3b; padding:10px; border-radius:8px; margin-bottom:15px;">🟢 스케줄 파일 연동 완료</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="color:#f87171; font-size:14px; font-weight:bold; background-color:#7f1d1d; padding:10px; border-radius:8px; margin-bottom:15px;">💡 마스터 엑셀 파일 업로드가 필요합니다.</div>', unsafe_allow_html=True)
+    
     input_password = st.text_input("🔓 데이터 제어 승인 암호", type="password", key="auth_pwd_input")
     is_authenticated = (input_password == MASTER_PASSWORD)
 
@@ -169,7 +174,7 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # usecols 완전 거세 후 무조건 순수 전체 행렬 구조 로딩
+    # usecols 완전 거세 후 정직하게 전체 엑셀 행렬 구조 로딩
     raw_df = pd.read_excel(final_file_target, header=None)
     
     start_row_idx = 0
@@ -180,17 +185,16 @@ if final_file_target:
             start_row_idx = idx + 1
             break
             
-    # [🚨 대표님 오더 지정 절대 열 직통 동기화 배선 프로토콜]
-    # 오타가 터졌던 매핑 오류 구역을 온전히 raw_df 단일 변수로만 묶어 원천 봉쇄했습니다.
-    # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
+    # [🚨 대표님 지정 오더 알파벳 열 절대 위치 1:1 직통 매핑 완공]
+    # A=0(코드), C=2(카테고리), F=5(가격표 유무), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
-        row_cells = raw_df.iloc[idx]  # 🚨 오타가 터졌던 변수명 완벽 수정 완료
-        if len(row_cells) < 21:  # U열 범위 안전 확인
+        row_cells = raw_df.iloc[idx]
+        if len(row_cells) < 21:
             continue
             
         p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
-        if pd.isna(p_date): # 문자열 헤더라인 터짐 차단용 예외 필터링
+        if pd.isna(p_date): # 문자열 헤더라인 터짐 완벽 차단 예외 처리
             continue
             
         clean_data_list.append({
@@ -208,7 +212,7 @@ if final_file_target:
     df = pd.DataFrame(clean_data_list)
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 🚨 [공백 데이터 왜곡 차단 마감]: nan, 빈 칸은 대표님 지시대로 '-' 처리
+    # 공백 데이터 정화 대치 규칙
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
         df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
@@ -360,7 +364,7 @@ if final_file_target:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            # [🚨 대표님 명세 100% 부합화 대완공]: 가독성 극대화 레이아웃 완성
+                            # [🚨 대표님 명세 100% 부합화 대완공]: 오타 완전 수정 및 가독성 레이아웃 최종 조립
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -418,4 +422,15 @@ if final_file_target:
                         memo_tuple = saved_notes.get(pure_excel_code, ("", ""))
                         key_m1 = f"input_m1_oth_{pure_excel_code}_{idx}"
                         user_m1 = st.text_input(label=f"T1_{pure_excel_code}_oth", value=memo_tuple[0], key=key_m1, placeholder="📋 특기사항 1 입력 후 Enter", label_visibility="collapsed")
-                        key_m2 = f"input
+                        key_m2 = f"input_m2_oth_{pure_excel_code}_{idx}"
+                        user_m2 = st.text_input(label=f"T2_{pure_excel_code}_oth", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
+                        if user_m1 != memo_tuple[0] or user_m2 != memo_tuple[1]:
+                            save_production_note(pure_excel_code, user_m1, user_m2)
+                            st.rerun()
+                        st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
+
+    render_schedule_grid(df_1week, "📅 1주 차 생산 스케줄 대쉬보드", "w1")
+    render_schedule_grid(df_2weeks, "📅 2주 차 생산 스케줄 대쉬보드", "w2")
+
+else:
+    st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
