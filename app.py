@@ -174,28 +174,32 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # [🚨 오너 지시 핵심 수술 구역]: 원본 엑셀 로드 범위를 A~U칼럼 전체로 확장 명시
+    # [🚨 오너 지시 핵심 패치 1]: 원본 마스터 엑셀의 데이터 타겟 범위(A부터 U칼럼 전체) 광역 확장 로드
     raw_df = pd.read_excel(final_file_target, usecols="A:U", header=None)
     if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
         raw_df = raw_df.iloc[1:]
         
-    # [🚨 오너 지시 타겟 칼럼 정밀 대조 배선 프로토콜]:
-    # 가격(Price) 전면 탈거 / K=10(PO#), L=11(Bag#), M=12(용량), Q=16(수량), U=20(날짜)
+    # [🚨 오너 지시 핵심 패치 2]: 파이썬 알파벳 인덱스 공식 명세에 맞춰 고정 매핑 수술
+    # A=0, C=2, F=5, L=11(Bag#), M=12(용량), O=14(이름), P=15(수량), U=20(날짜)
     df = pd.DataFrame()
     df['item_code'] = raw_df.iloc[:, 0].fillna('-').astype(str).str.strip()
     df['category'] = raw_df.iloc[:, 2].fillna('기타 카테고리').astype(str).str.strip()
+    df['price_tag'] = raw_df.iloc[:, 5].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
+    df['po_number'] = raw_df.iloc[:, 14].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
     
-    df['po_number'] = raw_df.iloc[:, 10].fillna('-').astype(str).str.strip()   # K칼럼 (인덱스 10)
-    df['bag_number'] = raw_df.iloc[:, 11].fillna('-').astype(str).str.strip()  # L칼럼 (인덱스 11)
-    df['volume'] = raw_df.iloc[:, 12].fillna('-').astype(str).str.strip()      # M칼럼 (인덱스 12)
+    # 대표님 신규 배선 명세: Bag# 은 L칼럼(11번째 인덱스)에서 무결하게 추출
+    df['bag_number'] = raw_df.iloc[:, 11].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
     
     df['product_name'] = raw_df.iloc[:, 14].fillna('-').astype(str).str.strip()
-    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 16], errors='coerce').fillna(0).astype(int) # Q칼럼 (인덱스 16)
-    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce') # U칼럼 (인덱스 20)
+    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 15], errors='coerce').fillna(0).astype(int)
+    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce')
+    
+    # 대표님 신규 배선 명세: 용량은 M칼럼(12번째 인덱스)을 다이렉트로 전폭 참조
+    df['volume'] = raw_df.iloc[:, 12].fillna('500ml').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '500ml')
     
     df = df.dropna(subset=['production_date'])
     
-    # 주차와 카테고리 안에서 동일 코드 밀착 집결 알고리즘
+    # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -215,7 +219,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 컴파일러 - 가격 제외 명세 반영]
+    # [⚙️ 주차별 분리 마스터 엑셀 컴파일러]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -240,15 +244,13 @@ if final_file_target:
         thin_side = Side(border_style="thin", color="cbd5e1")
         border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         
-        # 대표님 명세: 가격표 유무 칼럼을 제외하고 특기사항을 밀착 결합한 9대 마스터 칼럼 정의
-        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "Bag#", "특기사항 1", "특기사항 2"]
+        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "가격표 유무", "특기사항 1", "특기사항 2"]
         categories_order = ["skin", "body", "hair", "기타 카테고리"]
         current_row_idx = 1
         
         def write_week_block(ws, target_df, week_label_text, start_row):
             r_idx = start_row
             
-            # 주차 배너 마감
             ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=10)
             title_cell = ws.cell(row=r_idx, column=1)
             title_cell.value = week_label_text
@@ -292,14 +294,14 @@ if final_file_target:
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
-                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M칼럼 직통
+                        ws.cell(row=r_idx, column=5, value=r['volume'])
                         
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q칼럼 직통
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity'])
                         qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
-                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K칼럼 직통
-                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L칼럼 직통
+                        ws.cell(row=r_idx, column=7, value=r['po_number'])
+                        ws.cell(row=r_idx, column=8, value="유" if str(r['price_tag']).strip() != "-" else "무")
                         
                         ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
@@ -332,8 +334,8 @@ if final_file_target:
                         r_idx += 1
             return r_idx + 2
             
-        next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 라인업 계획 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
-        write_week_block(ws, df_2weeks, f"🗓️ 2주 차 생산 라인업 계획 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
+        next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 계획 수립 명세서 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
+        write_week_block(ws, df_2weeks, f"🗓️ 2주 차 생산 계획 수립 명세서 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
         
         ws.column_dimensions['A'].width = 15
         ws.column_dimensions['B'].width = 12
@@ -357,7 +359,7 @@ if final_file_target:
         st.download_button(
             label="📊 주차별 분리 마스터 엑셀 다운로드",
             data=split_excel_bytes,
-            file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx",
+            file_name=f"Fine_Formulation_M_L_Fixed_Schedule_{datetime.now().strftime('%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -522,18 +524,19 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
-                            # [🚨 대표님 핵심 마감]: 대시보드 스크린에서 가격표 유무를 전면 철거하고 순수하게 뼈대만 출력
+                            # [🚨 오너 지시 핵심 마감]: 대시보드 화면 스크린에도 M칼럼의 정밀 용량과 L칼럼의 Bag# 데이터 동시 가독 출력 완료
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
                                     <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
                                     <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
+                                        <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">가격표: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
                                         <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
                                     </div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
-                                    <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !items:center !important;">
+                                    <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
                                         <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
                                         <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
                                     </div>
@@ -572,11 +575,12 @@ if final_file_target:
                                 <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
                                 <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
                                 <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
+                                    <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">가격표: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
                                     <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
                                 </div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
-                                <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !items:center !important;">
+                                <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
                                     <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
                                     <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
                                 </div>
