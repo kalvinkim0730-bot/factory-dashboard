@@ -174,29 +174,31 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # 🚨 [대수술 완공]: 임의 압축(usecols)을 전면 제거하고 U열 이상 전체 영역을 정직하게 로드합니다.
+    # usecols를 완전히 사용하지 않고 통째로 들고 와서 알파벳 절대 인덱스를 그대로 대입합니다.
     raw_df = pd.read_excel(final_file_target, header=None)
     if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
         raw_df = raw_df.iloc[1:]
         
-    # 🚨 [대표님 오더 지정 절대 열 직통 매핑 교정]
-    # 알파벳 절대 위치: A=0, C=2, F=5, K=10, L=11, M=12, O=14, P=15, U=20
+    # [🚨 대표님 지정 오더 알파벳 열 절대 인덱스 1:1 맵핑 매커니즘 고정]
+    # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
     df = pd.DataFrame()
-    df['item_code'] = raw_df.iloc[:, 0].astype(str).str.strip()        # A열 (품목코드)
-    df['category'] = raw_df.iloc[:, 2].astype(str).str.strip()         # C열 (카테고리)
-    df['price_tag'] = raw_df.iloc[:, 5].astype(str).str.strip()        # F열 (가격표 유무)
-    df['po_number'] = raw_df.iloc[:, 10].astype(str).str.strip()       # K열 (PO 번호)
-    df['bag_number'] = raw_df.iloc[:, 11].astype(str).str.strip()      # L열 (Bag#)
-    df['volume'] = raw_df.iloc[:, 12].astype(str).str.strip()          # M열 (용량)
-    df['product_name'] = raw_df.iloc[:, 14].astype(str).str.strip()    # O열 (품목명)
-    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 15], errors='coerce').fillna(0).astype(int) # P열 (수량)
-    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce') # U열 (날짜)
+    df['item_code'] = raw_df.iloc[:, 0].astype(str).str.strip()        # A열
+    df['category'] = raw_df.iloc[:, 2].astype(str).str.strip()         # C열
+    df['price_tag'] = raw_df.iloc[:, 5].astype(str).str.strip()        # F열
+    df['po_number'] = raw_df.iloc[:, 10].astype(str).str.strip()       # K열
+    df['bag_number'] = raw_df.iloc[:, 11].astype(str).str.strip()      # L열 고정 (126 정상 추출)
+    df['volume'] = raw_df.iloc[:, 12].astype(str).str.strip()          # M열 고정 (N열 밀림 해결)
+    df['product_name'] = raw_df.iloc[:, 14].astype(str).str.strip()    # O열
+    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 16], errors='coerce').fillna(0).astype(int) # Q열
+    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce') # U열
     
     df = df.dropna(subset=['production_date'])
     
-    # 🚨 [공백 왜곡 원천 차단]: 해당 셀에 데이터가 비어있으면 대표님 지시대로 '-'로 완벽하게 대치
+    # 🚨 [공백 데이터 철저한 왜곡 방지]: nan, 빈 칸, 공백 문자열은 무조건 대표님 지시대로 '-' 처리
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
+        # Y나 N이 아니거나 공백인 상태 걸러내기
+        df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
     
     # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
@@ -227,7 +229,6 @@ if final_file_target:
         ws.title = "주차별_생산라인업"
         ws.views.sheetView[0].showGridLines = True
         
-        # 디자인 서식 프로토콜 설정
         font_main_title = Font(name="Malgun Gothic", size=14, bold=True, color="FFFFFF")
         font_header = Font(name="Malgun Gothic", size=11, bold=True, color="FFFFFF")
         font_data = Font(name="Malgun Gothic", size=10)
@@ -293,7 +294,7 @@ if final_file_target:
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
                         ws.cell(row=r_idx, column=5, value=r['volume'])     # M열 대조 연동
                         
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # P열 대조 연동
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q열 대조 연동
                         qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
@@ -523,16 +524,14 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
-                            # [🚨 최종 마감 완료]: 원본 뼈대에 맞춰 왜곡 및 밀림 현상을 완벽 박멸하여 정상 출력
+                            # [🚨 대표님 핵심 지시 조항]: 용량 줄바꿈(M열 연동), Bag#(L열 연동) 레이아웃 완전 완공
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
                                     <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
-                                    <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
-                                        <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
-                                        <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
-                                    </div>
+                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
+                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                     <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
@@ -574,8 +573,8 @@ if final_file_target:
                                 <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
                                 <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
                                 <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
-                                    <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">가격표: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
-                                    <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
+                                    <span class="owner-text-row" style="font-size:14px !important; color:#ccc !important;">가격표 유무: <span style="color:#63b3ed !important;">{row['price_tag']}</span></span>
+                                    <span class="owner-text-row" style="font-size:14px !important; color:#ffffff !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
                                 </div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
