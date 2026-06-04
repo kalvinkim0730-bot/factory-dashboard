@@ -213,10 +213,10 @@ if final_file_target:
     # 영구 기억용 상태 리스트 분리용 변수
     completed_codes = [code for code, vals in saved_notes.items() if len(vals) > 5 and vals[5] == "Y"]
     
-    # 🚨 [생산 지연 아이템 선별 구역 완공]: 아직 완료('Y')가 안 되었는데, V열 날짜 기한이 오늘 시점보다 과거인 경우
+    # 최상단 지연 아이템 선별
     df_delayed = df[(df['production_date'] < today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
     
-    # 정상 스케줄 목록 배선: 이미 지연되었거나 완료된 건 상단 1, 2주차 현역 풀에서 전격 제외 격리
+    # 정상 스케줄 목록 배선
     df_active_pool = df[(df['production_date'] >= today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
     
     df_1week = df_active_pool[df_active_pool['production_date'] <= target_next_monday].copy()
@@ -314,7 +314,7 @@ if final_file_target:
                         r_idx += 1
             return r_idx + 2
             
-        next_start_row = write_week_block(ws, df_w1, f"🗓️ 1주 차 생산 라인업 계획", current_row_idx)
+        next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 라인업 계획", current_row_idx)
         write_week_block(ws, df_w2, f"🗓️ 2주 차 생산 라인업 계획", next_start_row)
         
         for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 16), ('K', 12), ('L', 14), ('M', 14), ('N', 14)]:
@@ -375,10 +375,46 @@ if final_file_target:
                         st.success(f"🎯 총 {sync_success_count}개 품목의 공식 썸네일 다운로드 성공!")
                         time.sleep(1)
                         st.rerun()
+            else:
+                st.error("❌ 승인 암호가 올바르지 않습니다.")
 
-    # 초밀착 마감 디자인 시스템 CSS
+    # 🚨 [초고속 앵커 링커 및 스크롤바 숏컷 고정 디자인 CSS 주입]
     st.markdown("""
         <style>
+            /* 🚀 [대표님 명세 조항]: 우측 스크롤바 옆 화면 중앙에 절대 고정되는 플로팅 네온 버튼 설계 */
+            .floating-shortcut-anchor {
+                position: fixed !important;
+                right: 35px !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+                z-index: 999999 !important;
+                background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+                color: #ffffff !important;
+                border: 2px solid #38bdf8 !important;
+                border-radius: 12px !important;
+                padding: 14px 18px !important;
+                font-family: 'Malgun Gothic', sans-serif !important;
+                font-size: 14px !important;
+                font-weight: 900 !important;
+                text-decoration: none !important;
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.6) !important;
+                transition: all 0.2s ease-in-out !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                letter-spacing: -0.3px !important;
+                cursor: pointer !important;
+            }
+            .floating-shortcut-anchor:hover {
+                background: #38bdf8 !important;
+                color: #0f172a !important;
+                transform: translateY(-50%) scale(1.05) !important;
+                box-shadow: 0 0 30px rgba(56, 189, 248, 0.9) !important;
+            }
+            
+            /* 기본 스크롤 동작 부드럽게 세팅 */
+            html { scroll-behavior: smooth !important; }
+
             .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
             .owner-square-frame img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain !important; }
             .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
@@ -398,11 +434,10 @@ if final_file_target:
             div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div { flex-grow: 1 !important; width: 100% !important; }
             div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 28px !important; padding: 2px 8px !important; }
             
-            /* 체크박스 오너 특화 스타일 */
+            /* 체크박스 스타일 */
             div[data-testid="stCheckbox"] { background-color: #111827 !important; border: 1px dashed #ef4444 !important; border-radius: 8px !important; padding: 6px 12px !important; margin-top: 5px !important; margin-bottom: 8px !important; }
             div[data-testid="stCheckbox"] label span { color: #f87171 !important; font-weight: bold !important; font-size: 14px !important; }
             
-            /* 🚨 지연 전용 체크박스 스타일 특화 */
             div.delay-box-mark div[data-testid="stCheckbox"] { border: 1px solid #ff0000 !important; background-color: #2d1616 !important; }
             div.delay-box-mark div[data-testid="stCheckbox"] label span { color: #ff6b6b !important; }
             
@@ -410,13 +445,19 @@ if final_file_target:
         </style>
     """, unsafe_allow_html=True)
 
-    # 핵심 렌더러 함수
-    def render_schedule_grid(target_df, title_label, section_prefix, is_completed_tab=False, is_delay_tab=False):
+    # 🚨 [초고속 HTML 물리 앵커 타겟팅 다이렉트 사출] : 스크롤 유도용 고유 태그 박음질
+    st.markdown('<a href="#current-week-target" class="floating-shortcut-anchor">📅 현재 주차 스케줄 직행</a>', unsafe_allow_html=True)
+
+    def render_schedule_grid(target_df, title_label, section_prefix, is_completed_tab=False, is_delay_tab=False, inject_anchor=False):
         if is_delay_tab and target_df.empty:
-            # 🚨 지연 아이템이 없을 때는 최상단 알림 구역을 아예 숨기거나 가벼운 안전 메시지만 출력
             return
             
         st.markdown("---")
+        
+        # 🚨 [앵커 체인 바인딩 구역]: 1주차 구역이 렌더링될 때 정확한 HTML ID를 투사하여 타겟 주소를 확보합니다.
+        if inject_anchor:
+            st.markdown('<div id="current-week-target" style="padding-top:10px;"></div>', unsafe_allow_html=True)
+            
         st.subheader(title_label)
         
         if not target_df.empty:
@@ -434,7 +475,6 @@ if final_file_target:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            # 타겟 보드 텍스트 카드 출력
                             st.html(f"""
                                 <div class="owner-info-card-wrap" style="border: 2px solid {'#ef4444' if is_delay_tab else '#2d3748'} !important;">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -454,29 +494,19 @@ if final_file_target:
                             memo_tuple = saved_notes.get(pure_excel_code, ("-", "-", "-", "-", "-", "N"))
                             current_check_state = True if memo_tuple[5] == "Y" else False
                             
-                            # 체크박스 분기 처리
-                            if is_completed_tab:
-                                check_label = "✅ 생산 완료 완료됨"
-                            elif is_delay_tab:
-                                check_label = "⚠️ 긴급! 생산완료 처리"
-                            else:
-                                check_label = "🚨 완료 시 체크 (하단 이동)"
+                            if is_completed_tab: check_label = "✅ 생산 완료 완료됨"
+                            elif is_delay_tab: check_label = "⚠️ 긴급! 생산완료 처리"
+                            else: check_label = "🚨 완료 시 체크 (하단 이동)"
                                 
-                            # 지연 구역일 경우 CSS 식별 컨테이너 주입
-                            if is_delay_tab:
-                                st.markdown('<div class="delay-box-mark">', unsafe_allow_html=True)
-                                
+                            if is_delay_tab: st.markdown('<div class="delay-box-mark">', unsafe_allow_html=True)
                             user_checked = st.checkbox(label=check_label, value=current_check_state, key=f"chk_{section_prefix}_{pure_excel_code}_{idx}")
-                            
-                            if is_delay_tab:
-                                st.markdown('</div>', unsafe_allow_html=True)
+                            if is_delay_tab: st.markdown('</div>', unsafe_allow_html=True)
                                 
                             if user_checked != current_check_state:
                                 next_status = "Y" if user_checked else "N"
                                 save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
                                 st.rerun()
                             
-                            # 가로형 5대 인풋창
                             u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
                             u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
                             u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
@@ -490,17 +520,66 @@ if final_file_target:
                                 
                             st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
 
-    # 🚨 [1단계 제어공정] : 최상단에 생산지연 아이템 강제 노출 집행
+            # 기타 카테고리
+            other_df = target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
+            if not other_df.empty:
+                st.markdown('<div style="font-size:20px; font-weight:bold; color:#94a3b8; padding:6px 12px; background-color:#0f172a; border-left:5px solid #94a3b8; border-radius:4px; margin-top:25px; margin-bottom:15px;">📦 기타 카테고리 Lineup</div>', unsafe_allow_html=True)
+                cols = st.columns(6)
+                for idx, row in other_df.reset_index(drop=True).iterrows():
+                    excel_code = row['item_code']
+                    pure_excel_code = extract_pure_6_code(excel_code)
+                    with cols[idx % 6]:
+                        local_base64_data = get_saved_local_image_base64(pure_excel_code)
+                        st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
+                        
+                        st.html(f"""
+                            <div class="owner-info-card-wrap">
+                                <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
+                                <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
+                                <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
+                                    <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
+                                    <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
+                                </div>
+                            </div>
+                        """)
+                        memo_tuple = saved_notes.get(pure_excel_code, ("-", "-", "-", "-", "-", "N"))
+                        current_check_state = True if memo_tuple[5] == "Y" else False
+                        
+                        check_label = "✅ 생산 완료 완료됨" if is_completed_tab else "🚨 완료 시 체크 (하단 이동)"
+                        user_checked = st.checkbox(label=check_label, value=current_check_state, key=f"chk_oth_{pure_excel_code}_{idx}")
+                        if user_checked != current_check_state:
+                            next_status = "Y" if user_checked else "N"
+                            save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
+                            st.rerun()
+                            
+                        u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_oth_{pure_excel_code}_{idx}")
+                        u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_oth_{pure_excel_code}_{idx}")
+                        u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_oth_{pure_excel_code}_{idx}")
+                        u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], key=f"inp_q_oth_{pure_excel_code}_{idx}")
+                        u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4], key=f"inp_s_oth_{pure_excel_code}_{idx}")
+                        
+                        if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
+                            u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
+                            save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
+                            st.rerun()
+                        st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+
+    # 최상단 지연 아이템 리스트
     if not df_delayed.empty:
         st.markdown("""<div style='margin-top:20px; border-bottom: 4px solid #ff0000; padding-bottom:5px;'><h2 style='color:#ff4d4d; font-weight:bold;'>⚠️ FINE FORMULATION 생산 스케줄 지연 알림 리스트</h2></div>""", unsafe_allow_html=True)
         render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목 (현장 즉시 독촉 필요)", "delayed", is_delay_tab=True)
         st.markdown("""<div style='margin-top:30px; margin-bottom:30px; border-bottom: 2px dashed #475569;'></div>""", unsafe_allow_html=True)
 
-    # 중단: 현재 기한 내에 가동 중인 정상 주차별 대시보드
-    render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1")
+    # 🚨 [1주차 구역에 앵커 스위치 True 주입] : 버튼 클릭 시 이 위치로 화면이 스무스하게 스크롤다운됩니다.
+    render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1", inject_anchor=True)
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
     
-    # 하단: 완료 처리된 영구 이력 보존 구역
+    # 최하단 완료 풀
     st.markdown("""<div style='margin-top:80px; border-bottom: 3px dashed #10b981;'></div>""", unsafe_allow_html=True)
     render_schedule_grid(df_completed_pool, f"✅ 실시간 생산 완료 영구 보존 라인업 (주차 무관 상시 보존)", "done", is_completed_tab=True)
 
