@@ -342,7 +342,7 @@ if final_file_target:
 
     with st.sidebar:
         st.markdown("---")
-        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 데이터 추출 센터</div>', unsafe_allow_html=True)
         
         # 주차별 완벽 분리형 고해상도 이미지 포함 엑셀 스트림 생성
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
