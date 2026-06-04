@@ -210,14 +210,16 @@ if final_file_target:
         })
         
     df = pd.DataFrame(clean_data_list)
-    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 공백 데이터 정화 대치 규칙
+    # 🚨 [무한로딩 해제 코어 패치]: 카테고리와 정렬 대상이 되는 모든 열을 강제로 순수 str 형식으로 변환하여 데이터 정렬 충돌을 원천 차단합니다.
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
+        df[col] = df[col].fillna('-').astype(str).str.strip()
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
         df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
+
+    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
+    # 이제 형변환이 완료되어 데이터 충돌 없이 무조건 관통합니다.
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -364,7 +366,7 @@ if final_file_target:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            # [🚨 대표님 명세 100% 부합화 대완공]: 오타 완전 수정 및 가독성 레이아웃 최종 조립
+                            # [🚨 대표님 명세 100% 부합화 대완공]: 가독성 극대화 레이아웃 완성
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
