@@ -199,7 +199,7 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # 주차 분리 타임스탬프 계산
+    # 주차 타임스탬프 계산
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
@@ -212,7 +212,6 @@ if final_file_target:
 
     completed_codes = [code for code, vals in saved_notes.items() if len(vals) > 5 and vals[5] == "Y"]
     
-    # 최상단 지연 및 액티브 풀 분리
     df_delayed = df[(df['production_date'] < today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
     df_active_pool = df[(df['production_date'] >= today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
     
@@ -371,55 +370,31 @@ if final_file_target:
                         st.success(f"🎯 총 {sync_success_count}개 품목의 공식 썸네일 다운로드 성공!")
                         time.sleep(1)
                         st.rerun()
-            else:
-                st.error("❌ 승인 암호가 올바르지 않습니다.")
 
-    # 🚨 [하이브리드 디바이스 감지형 반응형 CSS 공정 완공]
+    # 🚨 [초경량 풀 와이드 마감 시스템 CSS 고도화 수술 구역]
     st.markdown("""
         <style>
-            /* 🖥️ 기본 PC 브라우저 레이아웃 규칙 (우측 스크롤바 중앙 정렬 고정) */
             .floating-shortcut-anchor {
-                position: fixed !important;
-                right: 35px !important;
-                top: 50% !important;
-                transform: translateY(-50%) !important;
-                z-index: 999999 !important;
+                position: fixed !important; right: 35px !important; top: 50% !important;
+                transform: translateY(-50%) !important; z-index: 999999 !important;
                 background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
-                color: #ffffff !important;
-                border: 2px solid #38bdf8 !important;
-                border-radius: 12px !important;
-                padding: 14px 18px !important;
-                font-family: 'Malgun Gothic', sans-serif !important;
-                font-size: 14px !important;
-                font-weight: 900 !important;
-                text-decoration: none !important;
-                box-shadow: 0 0 20px rgba(56, 189, 248, 0.6) !important;
-                transition: all 0.2s ease-in-out !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                letter-spacing: -0.3px !important;
-                cursor: pointer !important;
+                color: #ffffff !important; border: 2px solid #38bdf8 !important; border-radius: 12px !important;
+                padding: 14px 18px !important; font-family: 'Malgun Gothic', sans-serif !important;
+                font-size: 14px !important; font-weight: 900 !important; text-decoration: none !important;
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.6) !important; transition: all 0.2s ease-in-out !important;
+                display: flex !important; align-items: center !important; justify-content: center !important;
+                letter-spacing: -0.3px !important; cursor: pointer !important;
             }
             .floating-shortcut-anchor:hover {
                 background: #38bdf8 !important; color: #0f172a !important;
-                transform: translateY(-50%) scale(1.05) !important;
-                box-shadow: 0 0 30px rgba(56, 189, 248, 0.9) !important;
+                transform: translateY(-50%) scale(1.05) !important; box-shadow: 0 0 30px rgba(56, 189, 248, 0.9) !important;
             }
             
-            /* 📱 [🚨 대표님 지시 무결점 투사 조항]: 모바일(폰) 웹 뷰 환경 정밀 탐색 미디어 쿼리 */
             @media screen and (max-width: 768px) {
                 .floating-shortcut-anchor {
-                    top: 12px !important;      /* ➔ 중앙에서 우측 윗단 엣지로 탈출 */
-                    right: 12px !important;
-                    transform: none !important;  /* 세로축 중앙 정렬 제거 */
-                    padding: 8px 12px !important; /* 모바일 전용 콤팩트 규격 압축 */
-                    font-size: 12px !important;
-                    border-radius: 8px !important;
+                    top: 12px !important; right: 12px !important; transform: none !important;
+                    padding: 8px 12px !important; font-size: 12px !important; border-radius: 8px !important;
                     box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4) !important;
-                }
-                .floating-shortcut-anchor:hover {
-                    transform: scale(1.02) !important;
                 }
             }
             
@@ -431,20 +406,25 @@ if final_file_target:
             
             div[data-testid="stVerticalBlock"] > div { margin-bottom: 0px !important; padding-bottom: 0px !important; }
             
+            /* 🚨 [오너 명세 완공]: 좌측 라벨 고정 텍스트를 완전히 증발시키고 풀와이드로 사출 */
             div[data-testid="stTextInput"] { 
-                display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important;
-                margin-top: 0px !important; margin-bottom: 1px !important; padding: 0px !important; gap: 10px !important;
+                display: block !important;
+                margin-top: 0px !important; margin-bottom: 2px !important; padding: 0px !important;
             }
-            div[data-testid="stTextInput"] label { 
-                font-size: 13px !important; color: #94a3b8 !important; font-weight: bold !important; min-width: 80px !important; max-width: 80px !important;
-                text-align: left !important; margin: 0px !important; padding: 0px !important; white-space: nowrap !important;
+            /* 기존 라벨 태그 영역 숨김 */
+            div[data-testid="stTextInput"] label { display: none !important; }
+            
+            /* 입력 박스가 가로 전체를 100% 채우도록 밀착 교정 */
+            div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div { width: 100% !important; }
+            div[data-testid="stTextInput"] input { 
+                background-color: #0f172a !important; color: #38bdf8 !important; 
+                border: 1px solid #334155 !important; border-radius: 6px !important; 
+                font-size: 13px !important; height: 32px !important; padding: 4px 10px !important;
+                width: 100% !important;
             }
-            div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div { flex-grow: 1 !important; width: 100% !important; }
-            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 28px !important; padding: 2px 8px !important; }
             
             div[data-testid="stCheckbox"] { background-color: #111827 !important; border: 1px dashed #ef4444 !important; border-radius: 8px !important; padding: 6px 12px !important; margin-top: 5px !important; margin-bottom: 8px !important; }
             div[data-testid="stCheckbox"] label span { color: #f87171 !important; font-weight: bold !important; font-size: 14px !important; }
-            
             div.delay-box-mark div[data-testid="stCheckbox"] { border: 1px solid #ff0000 !important; background-color: #2d1616 !important; }
             div.delay-box-mark div[data-testid="stCheckbox"] label span { color: #ff6b6b !important; }
             
@@ -452,7 +432,6 @@ if final_file_target:
         </style>
     """, unsafe_allow_html=True)
 
-    # 앵커 링크 연결 사출
     st.markdown('<a href="#current-week-target" class="floating-shortcut-anchor">📅 현재 주차 이동</a>', unsafe_allow_html=True)
 
     def render_schedule_grid(target_df, title_label, section_prefix, is_completed_tab=False, is_delay_tab=False, inject_anchor=False):
@@ -512,14 +491,18 @@ if final_file_target:
                                 save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
                                 st.rerun()
                             
-                            u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4], key=f"inp_s_{section_prefix}_{pure_excel_code}_{idx}")
+                            # 🚨 [플레이스홀더 고속 이식 공정]: 라벨을 제거하고 박스 내부 힌트로 완전 이식 통합 마감
+                            u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0] if memo_tuple[0] != "-" else "", placeholder="1. 카톤코드 입력", key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1] if memo_tuple[1] != "-" else "", placeholder="2. 개입수 입력", key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2] if memo_tuple[2] != "-" else "", placeholder="3. 제조일 입력", key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4] if memo_tuple[4] != "-" else "", placeholder="5. 생산수량 입력", key=f"inp_s_{section_prefix}_{pure_excel_code}_{idx}")
                             
-                            if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
-                                u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
+                            if (u_c_code != (memo_tuple[0] if memo_tuple[0] != "-" else "") or 
+                                u_pack_qty != (memo_tuple[1] if memo_tuple[1] != "-" else "") or 
+                                u_m_date != (memo_tuple[2] if memo_tuple[2] != "-" else "") or 
+                                u_m_qty != (memo_tuple[3] if memo_tuple[3] != "-" else "") or 
+                                u_p_qty != (memo_tuple[4] if memo_tuple[4] != "-" else "")):
                                 save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
                                 st.rerun()
                                 
@@ -562,29 +545,29 @@ if final_file_target:
                             save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
                             st.rerun()
                             
-                        u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_oth_{pure_excel_code}_{idx}")
-                        u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_oth_{pure_excel_code}_{idx}")
-                        u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_oth_{pure_excel_code}_{idx}")
-                        u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], key=f"inp_q_oth_{pure_excel_code}_{idx}")
-                        u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4], key=f"inp_s_oth_{pure_excel_code}_{idx}")
+                        u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0] if memo_tuple[0] != "-" else "", placeholder="1. 카톤코드 입력", key=f"inp_c_oth_{pure_excel_code}_{idx}")
+                        u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1] if memo_tuple[1] != "-" else "", placeholder="2. 개입수 입력", key=f"inp_p_oth_{pure_excel_code}_{idx}")
+                        u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2] if memo_tuple[2] != "-" else "", placeholder="3. 제조일 입력", key=f"inp_d_oth_{pure_excel_code}_{idx}")
+                        u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3] if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_oth_{pure_excel_code}_{idx}")
+                        u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4] if memo_tuple[4] != "-" else "", placeholder="5. 생산수량 입력", key=f"inp_s_oth_{pure_excel_code}_{idx}")
                         
-                        if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
-                            u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
+                        if (u_c_code != (memo_tuple[0] if memo_tuple[0] != "-" else "") or 
+                            u_pack_qty != (memo_tuple[1] if memo_tuple[1] != "-" else "") or 
+                            u_m_date != (memo_tuple[2] if memo_tuple[2] != "-" else "") or 
+                            u_m_qty != (memo_tuple[3] if memo_tuple[3] != "-" else "") or 
+                            u_p_qty != (memo_tuple[4] if memo_tuple[4] != "-" else "")):
                             save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
                             st.rerun()
-                        st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+                        st.markdown('<div style="margin-dimensions:8px;"></div>', unsafe_allow_html=True)
 
-    # 최상단 지연 구역
     if not df_delayed.empty:
         st.markdown("""<div style='margin-top:20px; border-bottom: 4px solid #ff0000; padding-bottom:5px;'><h2 style='color:#ff4d4d; font-weight:bold;'>⚠️ FINE FORMULATION 생산 스케줄 지연 알림 리스트</h2></div>""", unsafe_allow_html=True)
         render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목 (현장 즉시 독촉 필요)", "delayed", is_delay_tab=True)
         st.markdown("""<div style='margin-top:30px; margin-bottom:30px; border-bottom: 2px dashed #475569;'></div>""", unsafe_allow_html=True)
 
-    # 중단 가동 주차 보드
     render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1", inject_anchor=True)
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
     
-    # 최하단 완료 구역
     st.markdown("""<div style='margin-top:80px; border-bottom: 3px dashed #10b981;'></div>""", unsafe_allow_html=True)
     render_schedule_grid(df_completed_pool, f"✅ 실시간 생산 완료 영구 보존 라인업 (주차 무관 상시 보존)", "done", is_completed_tab=True)
 
