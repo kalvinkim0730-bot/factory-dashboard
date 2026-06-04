@@ -174,50 +174,29 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # [🚨 대표님 핵심 수정 집행 구역]: 자동 압축 로딩(usecols)을 파괴하고 전체 열(header=None)을 완벽 정직하게 판독합니다.
-    raw_excel = pd.read_excel(final_file_target, header=None)
-    
-    # 엑셀 데이터의 진짜 시작 로우 인덱스를 문자열 검증으로 정밀 스캔
-    start_row_idx = 0
-    for idx, row in raw_excel.iterrows():
-        row_str_list = [str(cell) for cell in row.dropna().tolist()]
-        combined_row_text = "".join(row_str_list)
-        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
-            start_row_idx = idx + 1
-            break
-            
-    # [🚨 오너 지시 절대 조항]: 대표님이 지정한 알파벳 열에서만 데이터를 다이렉트로 가져옵니다.
-    # A=0(코드), C=2(카테고리), F=5(가격표 유무), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
-    clean_data_list = []
-    for idx in range(start_row_idx, len(raw_excel)):
-        row_cells = raw_excel.iloc[idx]
-        if len(row_cells) < 21:  # U열 범위 안전 확인
-            continue
-            
-        p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
-        if pd.isna(p_date): # 날짜가 들어있지 않은 빈칸 로우 탈거
-            continue
-            
-        clean_data_list.append({
-            'item_code': str(row_cells[0]).strip(),     # A열 직통 대조
-            'category': str(row_cells[2]).strip(),      # C열 직통 대조
-            'price_tag': str(row_cells[5]).strip(),     # F열 직통 대조 (가격표 유무)
-            'po_number': str(row_cells[10]).strip(),    # K열 직통 대조 (PO)
-            'bag_number': str(row_cells[11]).strip(),   # L열 직통 대조 (Bag#)
-            'volume': str(row_cells[12]).strip(),       # M열 직통 대조 (용량)
-            'product_name': str(row_cells[14]).strip(), # O열 직통 대조 (품목명)
-            'quantity': row_cells[16],                  # Q열 직통 대조 (수량)
-            'production_date': p_date
-        })
+    # 🚨 [대수술 완공]: 임의 압축(usecols)을 전면 제거하고 U열 이상 전체 영역을 정직하게 로드합니다.
+    raw_df = pd.read_excel(final_file_target, header=None)
+    if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
+        raw_df = raw_df.iloc[1:]
         
-    df = pd.DataFrame(clean_data_list)
+    # 🚨 [대표님 오더 지정 절대 열 직통 매핑 교정]
+    # 알파벳 절대 위치: A=0, C=2, F=5, K=10, L=11, M=12, O=14, P=15, U=20
+    df = pd.DataFrame()
+    df['item_code'] = raw_df.iloc[:, 0].astype(str).str.strip()        # A열 (품목코드)
+    df['category'] = raw_df.iloc[:, 2].astype(str).str.strip()         # C열 (카테고리)
+    df['price_tag'] = raw_df.iloc[:, 5].astype(str).str.strip()        # F열 (가격표 유무)
+    df['po_number'] = raw_df.iloc[:, 10].astype(str).str.strip()       # K열 (PO 번호)
+    df['bag_number'] = raw_df.iloc[:, 11].astype(str).str.strip()      # L열 (Bag#)
+    df['volume'] = raw_df.iloc[:, 12].astype(str).str.strip()          # M열 (용량)
+    df['product_name'] = raw_df.iloc[:, 14].astype(str).str.strip()    # O열 (품목명)
+    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 15], errors='coerce').fillna(0).astype(int) # P열 (수량)
+    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce') # U열 (날짜)
     
-    # 공백이나 누락 데이터로 인한 형식 깨짐 방지용 안전 마감 수식
-    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
+    df = df.dropna(subset=['production_date'])
     
-    # 🚨 [대표님 핵심 요구사항]: 공백일 경우 데이터 왜곡 없이 무조건 -로만 표시 고정
+    # 🚨 [공백 왜곡 원천 차단]: 해당 셀에 데이터가 비어있으면 대표님 지시대로 '-'로 완벽하게 대치
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
-        df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
+        df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
     
     # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
@@ -265,14 +244,14 @@ if final_file_target:
         thin_side = Side(border_style="thin", color="cbd5e1")
         border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         
-        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "가격표 유무", "특기사항 1", "특기사항 2"]
+        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "Bag#", "가격표 유무", "특기사항 1", "특기사항 2"]
         categories_order = ["skin", "body", "hair", "기타 카테고리"]
         current_row_idx = 1
         
         def write_week_block(ws, target_df, week_label_text, start_row):
             r_idx = start_row
             
-            ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=10)
+            ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
             title_cell = ws.cell(row=r_idx, column=1)
             title_cell.value = week_label_text
             title_cell.font = font_main_title
@@ -294,13 +273,13 @@ if final_file_target:
                 cate_df = target_df[target_df['category'].str.lower().str.contains(cate)] if cate != "기타 카테고리" else target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
                     
                 if not cate_df.empty:
-                    ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=10)
+                    ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
                     g_cell = ws.cell(row=r_idx, column=1)
                     g_cell.value = f"🌿 {cate.upper()} CARE LINEUP"
                     g_cell.font = font_group
                     g_cell.fill = fill_group
                     g_cell.alignment = align_left
-                    for c_num in range(1, 11):
+                    for c_num in range(1, 12):
                         ws.cell(row=r_idx, column=c_num).border = border_all
                     ws.row_dimensions[r_idx].height = 24
                     r_idx += 1
@@ -314,21 +293,22 @@ if final_file_target:
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
                         ws.cell(row=r_idx, column=5, value=r['volume'])     # M열 대조 연동
                         
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q열 대조 연동
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # P열 대조 연동
                         qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
                         ws.cell(row=r_idx, column=7, value=r['po_number'])  # K열 대조 연동
                         ws.cell(row=r_idx, column=8, value=r['bag_number']) # L열 대조 연동
+                        ws.cell(row=r_idx, column=9, value=r['price_tag'])  # F열 대조 연동
                         
-                        ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
-                        ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
+                        ws.cell(row=r_idx, column=10, value=memo_vals[0]).alignment = align_left
+                        ws.cell(row=r_idx, column=11, value=memo_vals[1]).alignment = align_left
                         
-                        for c_idx in range(1, 11):
+                        for c_idx in range(1, 12):
                             c_cell = ws.cell(row=r_idx, column=c_idx)
                             c_cell.font = font_data
                             c_cell.border = border_all
-                            if c_idx != 4 and c_idx != 6 and c_idx != 1 and c_idx != 9 and c_idx != 10:
+                            if c_idx != 4 and c_idx != 6 and c_idx != 1 and c_idx != 10 and c_idx != 11:
                                 c_cell.alignment = align_center
                             elif c_idx == 1:
                                 c_cell.alignment = align_center
@@ -363,8 +343,9 @@ if final_file_target:
         ws.column_dimensions['F'].width = 14
         ws.column_dimensions['G'].width = 16
         ws.column_dimensions['H'].width = 14
-        ws.column_dimensions['I'].width = 25
+        ws.column_dimensions['I'].width = 14
         ws.column_dimensions['J'].width = 25
+        ws.column_dimensions['K'].width = 25
         
         wb.save(output)
         return output.getvalue()
@@ -542,7 +523,7 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
-                            # [🚨 대표님 핵심 명세 이식 완료 구역]: 지정하신 절대 알파벳 열 데이터만 깨끗하게 스크린 출력
+                            # [🚨 최종 마감 완료]: 원본 뼈대에 맞춰 왜곡 및 밀림 현상을 완벽 박멸하여 정상 출력
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
