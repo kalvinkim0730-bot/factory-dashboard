@@ -41,7 +41,7 @@ def get_saved_local_image_base64(pure_code):
     return None
 
 # ---------------------------------------------------------------------
-# [📝 특기사항 1, 2 멀티 메모리 영구 저장 엔진]
+# [📝 5대 핵심 입력 데이터 멀티 메모리 영구 저장 엔진]
 # ---------------------------------------------------------------------
 def load_production_notes():
     notes = {}
@@ -50,23 +50,26 @@ def load_production_notes():
             with open(NOTES_DB_PATH, "r", encoding="utf-8") as f:
                 for line in f:
                     if "::" in line:
-                        parts = line.split("::", 2)
+                        parts = line.split("::", 5)
                         code = parts[0].strip()
-                        memo1 = parts[1].strip() if len(parts) > 1 else ""
-                        memo2 = parts[2].strip() if len(parts) > 2 else ""
-                        notes[code] = (memo1, memo2)
+                        c_code = parts[1].strip() if len(parts) > 1 else ""
+                        pack_qty = parts[2].strip() if len(parts) > 2 else ""
+                        m_date = parts[3].strip() if len(parts) > 3 else ""
+                        m_qty = parts[4].strip() if len(parts) > 4 else ""
+                        p_qty = parts[5].strip() if len(parts) > 5 else ""
+                        notes[code] = (c_code, pack_qty, m_date, m_qty, p_qty)
         except Exception:
             pass
     return notes
 
-def save_production_note(pure_code, memo1, memo2):
+def save_production_note(pure_code, c_code, pack_qty, m_date, m_qty, p_qty):
     notes = load_production_notes()
-    notes[pure_code] = (memo1.strip(), memo2.strip())
+    notes[pure_code] = (c_code.strip(), pack_qty.strip(), m_date.strip(), m_qty.strip(), p_qty.strip())
     try:
         with open(NOTES_DB_PATH, "w", encoding="utf-8") as f:
             for code, values in notes.items():
-                if values[0] or values[1]:
-                    f.write(f"{code}::{values[0]}::{values[1]}\n")
+                if any(values):
+                    f.write(f"{code}::{values[0]}::{values[1]}::{values[2]}::{values[3]}::{values[4]}\n")
     except Exception:
         pass
 
@@ -137,11 +140,6 @@ with st.sidebar:
     st.markdown(f'<div style="color:#ffffff; font-size:15px; font-weight:bold; background-color:#0284c7; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">🟢 시스템 가동 중 (활동 중 자동 연장)</div>', unsafe_allow_html=True)
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어 센터</div>', unsafe_allow_html=True)
     
-    if has_saved_file:
-        st.markdown('<div style="color:#4ade80; font-size:14px; font-weight:bold; background-color:#064e3b; padding:10px; border-radius:8px; margin-bottom:15px;">🟢 스케줄 파일 연동 완료</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div style="color:#f87171; font-size:14px; font-weight:bold; background-color:#7f1d1d; padding:10px; border-radius:8px; margin-bottom:15px;">💡 마스터 엑셀 파일 업로드가 필요합니다.</div>', unsafe_allow_html=True)
-    
     input_password = st.text_input("🔓 데이터 제어 승인 암호", type="password", key="auth_pwd_input")
     is_authenticated = (input_password == MASTER_PASSWORD)
 
@@ -167,15 +165,14 @@ if final_file_target:
             start_row_idx = idx + 1
             break
             
-    # [🚨 절대 열 1:1 직통 매핑 배선 프로토콜 고정]
-    # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), V=21(날짜)
+    # [A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), V=21(날짜)]
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
         row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 22:  # V열 범위 안전 확인
+        if len(row_cells) < 22:
             continue
             
-        p_date = pd.to_datetime(row_cells[21], errors='coerce') # V열 타겟팅 유지
+        p_date = pd.to_datetime(row_cells[21], errors='coerce') 
         if pd.isna(p_date): 
             continue
             
@@ -201,7 +198,7 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # [🚨 V열 생산계획 기준 주차 분리 알고리즘]
+    # [V열 생산계획 기준 주차 분리]
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
@@ -240,13 +237,13 @@ if final_file_target:
         thin_side = Side(border_style="thin", color="cbd5e1")
         border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         
-        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "Bag#", "가격표 유무", "특기사항 1", "특기사항 2"]
+        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "Bag#", "가격표 유무", "카톤코드", "개입수", "제조일", "제조량", "생산수량"]
         categories_order = ["skin", "body", "hair", "기타 카테고리"]
         current_row_idx = 1
         
         def write_week_block(ws, target_df, week_label_text, start_row):
             r_idx = start_row
-            ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
+            ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=14)
             title_cell = ws.cell(row=r_idx, column=1)
             title_cell.value = week_label_text
             title_cell.font = font_main_title; title_cell.fill = fill_week_title; title_cell.alignment = align_center
@@ -262,17 +259,17 @@ if final_file_target:
             for cate in categories_order:
                 cate_df = target_df[target_df['category'].str.lower().str.contains(cate)] if cate != "기타 카테고리" else target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
                 if not cate_df.empty:
-                    ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
+                    ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=14)
                     g_cell = ws.cell(row=r_idx, column=1, value=f"🌿 {cate.upper()} CARE LINEUP")
                     g_cell.font = font_group; g_cell.fill = fill_group; g_cell.alignment = align_left
-                    for c_num in range(1, 12):
+                    for c_num in range(1, 15):
                         ws.cell(row=r_idx, column=c_num).border = border_all
                     ws.row_dimensions[r_idx].height = 24
                     r_idx += 1
                     
                     for _, r in cate_df.iterrows():
                         p_code = extract_pure_6_code(r['item_code'])
-                        memo_vals = saved_notes.get(p_code, ("", ""))
+                        memo_vals = saved_notes.get(p_code, ("", "", "", "", ""))
                         
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
@@ -282,13 +279,16 @@ if final_file_target:
                         ws.cell(row=r_idx, column=7, value=r['po_number'])  
                         ws.cell(row=r_idx, column=8, value=r['bag_number']) 
                         ws.cell(row=r_idx, column=9, value=r['price_tag'])  
-                        ws.cell(row=r_idx, column=10, value=memo_vals[0]).alignment = align_left
-                        ws.cell(row=r_idx, column=11, value=memo_vals[1]).alignment = align_left
                         
-                        for c_idx in range(1, 12):
+                        ws.cell(row=r_idx, column=10, value=memo_vals[0]).alignment = align_center
+                        ws.cell(row=r_idx, column=11, value=memo_vals[1]).alignment = align_center
+                        ws.cell(row=r_idx, column=12, value=memo_vals[2]).alignment = align_center
+                        ws.cell(row=r_idx, column=13, value=memo_vals[3]).alignment = align_center
+                        ws.cell(row=r_idx, column=14, value=memo_vals[4]).alignment = align_center
+                        
+                        for c_idx in range(1, 15):
                             c_cell = ws.cell(row=r_idx, column=c_idx); c_cell.font = font_data; c_cell.border = border_all
-                            if c_idx not in [4, 6, 10, 11]: c_cell.alignment = align_center
-                            elif c_idx == 1: c_cell.alignment = align_center
+                            if c_idx not in [4, 6]: c_cell.alignment = align_center
                                 
                         ws.row_dimensions[r_idx].height = 35
                         img_path = f"{p_code}.png"
@@ -304,7 +304,7 @@ if final_file_target:
         next_start_row = write_week_block(ws, df_w1, f"🗓️ 1주 차 생산 라인업 계획", current_row_idx)
         write_week_block(ws, df_w2, f"🗓️ 2주 차 생산 라인업 계획", next_start_row)
         
-        for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 25), ('K', 25)]:
+        for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 16), ('K', 12), ('L', 14), ('M', 14), ('N', 14)]:
             ws.column_dimensions[l].width = w
         wb.save(output)
         return output.getvalue()
@@ -315,10 +315,9 @@ if final_file_target:
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
         st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
-        # 🚨 [대표님 오너 권한]: 사라졌던 트렐로 실물 이미지 동기화 버튼 구역 완벽 전격 부활
+        # [🔄 현재 스케줄 이미지 서버에 저장] 동기화 구역 완벽 유지
         st.markdown("---")
         st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업 센터</div>', unsafe_allow_html=True)
-        
         if st.button("🔄 현재 스케줄 이미지 서버에 저장", use_container_width=True):
             if is_authenticated:
                 sync_success_count = 0
@@ -367,15 +366,18 @@ if final_file_target:
             else:
                 st.error("❌ 승인 암호가 올바르지 않습니다.")
 
-    # 디자인 프론트엔드 스타일 마감 구역
+    # 🚨 [비주얼 극대화 마감 CSS]: 인풋 박스 상하 불필요 공백(Padding, Margin) 최소화 정밀 가공 구역
     st.markdown("""
         <style>
             .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
             .owner-square-frame img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain !important; }
             .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
             .owner-text-row { margin: 0px !important; padding: 0px !important; text-align: left !important; line-height: 1.4 !important; }
-            div[data-testid="stTextInput"] { margin-top: 4px !important; padding: 0px !important; }
-            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
+            
+            /* 5대 스마트 인풋 컴팩트 압축 바인딩 공정 */
+            div[data-testid="stTextInput"] { margin-top: 0px !important; margin-bottom: 2px !important; padding: 0px !important; }
+            div[data-testid="stTextInput"] label { font-size: 12px !important; color: #94a3b8 !important; font-weight: bold !important; margin-bottom: 1px !important; padding-top: 0px !important; }
+            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; padding: 4px 8px !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -392,8 +394,6 @@ if final_file_target:
                     cols = st.columns(6)
                     for idx, row in group_df.reset_index(drop=True).iterrows():
                         excel_code = row['item_code']
-                        
-                        # 🚨 [정밀 매핑 코드 복구]: 순수 앞 6자리 코드로 가공하여 로컬 에셋 폴더와 다이렉트로 연결합니다.
                         pure_excel_code = extract_pure_6_code(excel_code)
                         
                         with cols[idx % 6]:
@@ -408,7 +408,7 @@ if final_file_target:
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
+                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                     <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
                                         <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
                                         <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
@@ -416,17 +416,22 @@ if final_file_target:
                                 </div>
                             """)
                             
-                            memo_tuple = saved_notes.get(pure_excel_code, ("", ""))
-                            key_m1 = f"input_m1_{section_prefix}_{pure_excel_code}_{idx}"
-                            user_m1 = st.text_input(label=f"T1_{pure_excel_code}", value=memo_tuple[0], key=key_m1, placeholder="📋 특기사항 1 입력 후 Enter", label_visibility="collapsed")
-                            key_m2 = f"input_m2_{section_prefix}_{pure_excel_code}_{idx}"
-                            user_m2 = st.text_input(label=f"T2_{pure_excel_code}", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
+                            # 🚨 [대표님 핵심 지시 조항]: 기존 특기사항 2칸 폐기 ➔ 스마트 팩토리 5대 입력 컴팩트 연동
+                            memo_tuple = saved_notes.get(pure_excel_code, ("", "", "", "", ""))
                             
-                            if user_m1 != memo_tuple[0] or user_m2 != memo_tuple[1]:
-                                save_production_note(pure_excel_code, user_m1, user_m2)
+                            u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4], key=f"inp_s_{section_prefix}_{pure_excel_code}_{idx}")
+                            
+                            # 실시간 감지 변경 저장 처리
+                            if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
+                                u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
+                                save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty)
                                 st.rerun()
                                 
-                            st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
+                            st.markdown('<div style="margin-bottom:15px;"></div>', unsafe_allow_html=True)
             
             other_df = target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
             if not other_df.empty:
@@ -454,15 +459,18 @@ if final_file_target:
                                 </div>
                             </div>
                         """)
-                        memo_tuple = saved_notes.get(pure_excel_code, ("", ""))
-                        key_m1 = f"input_m1_oth_{pure_excel_code}_{idx}"
-                        user_m1 = st.text_input(label=f"T1_{pure_excel_code}_oth", value=memo_tuple[0], key=key_m1, placeholder="📋 특기사항 1 입력 후 Enter", label_visibility="collapsed")
-                        key_m2 = f"input_m2_oth_{pure_excel_code}_{idx}"
-                        user_m2 = st.text_input(label=f"T2_{pure_excel_code}_oth", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
-                        if user_m1 != memo_tuple[0] or user_m2 != memo_tuple[1]:
-                            save_production_note(pure_excel_code, user_m1, user_m2)
+                        memo_tuple = saved_notes.get(pure_excel_code, ("", "", "", "", ""))
+                        u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_oth_{pure_excel_code}_{idx}")
+                        u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_oth_{pure_excel_code}_{idx}")
+                        u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_oth_{pure_excel_code}_{idx}")
+                        u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], key=f"inp_q_oth_{pure_excel_code}_{idx}")
+                        u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4], key=f"inp_s_oth_{pure_excel_code}_{idx}")
+                        
+                        if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
+                            u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
+                            save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty)
                             st.rerun()
-                        st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
+                        st.markdown('<div style="margin-bottom:15px;"></div>', unsafe_allow_html=True)
 
     render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1")
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
