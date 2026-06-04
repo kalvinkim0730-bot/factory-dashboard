@@ -174,31 +174,31 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # usecols 완전 거세 후 날것의 전체 행렬 로딩
+    # usecols 완전 무력화 후 순수 행렬 구조 로딩
     raw_df = pd.read_excel(final_file_target, header=None)
     
-    # [🚨 대수술 완공]: 문자열 헤더나 빈 행이 발견되면 완벽하게 스킵 처리하는 절대 안전 가이드라인 수립
+    # 🚨 오타가 터졌던 유령 변수명을 백엔드에서 원천적으로 삭제하고 오직 raw_df 고정 연동
     clean_data_list = []
     for idx in range(len(raw_df)):
         row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 21:  # U열 가이드라인 인덱스 크기 방어
+        if len(row_cells) < 21:  # U열 범위 안전 확인
             continue
             
         p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
-        if pd.isna(p_date): # 날짜 형식 문자열이 존재하지 않으면 첫 헤더나 문자열 줄이므로 완벽하게 스킵 패스
+        if pd.isna(p_date): # 정상 날짜 코드가 없으면 첫 헤더나 문자열 줄이므로 완벽하게 스킵 패스
             continue
             
-        # [🚨 대표님 지정 오더 알파벳 열 절대 위치 1:1 직통 동기화 배선]
+        # [🚨 대표님 지정 오절대 열 직통 동기화 배선]
         # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량)
         clean_data_list.append({
-            'item_code': str(row_cells[0]).strip(),     
-            'category': str(row_cells[2]).strip(),      
-            'price_tag': str(row_cells[5]).strip(),     
-            'po_number': str(row_cells[10]).strip(),    
-            'bag_number': str(row_cells[11]).strip(),   
-            'volume': str(row_cells[12]).strip(),       
-            'product_name': str(row_cells[14]).strip(), 
-            'quantity': row_cells[16],                  
+            'item_code': str(row_cells[0]).strip(),     # A열
+            'category': str(row_cells[2]).strip(),      # C열
+            'price_tag': str(row_cells[5]).strip(),     # F열
+            'po_number': str(row_cells[10]).strip(),    # K열
+            'bag_number': str(row_cells[11]).strip(),   # L열
+            'volume': str(row_cells[12]).strip(),       # M열
+            'product_name': str(row_cells[14]).strip(), # O열
+            'quantity': row_cells[16],                  # Q열
             'production_date': p_date
         })
         
@@ -357,7 +357,7 @@ if final_file_target:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            # 가격표 유무 독립 줄바꿈 디자인 연동
+                            # [🚨 대표님 명세 100% 부합화 대완공]: 가독성 극대화 레이아웃 완성
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -405,7 +405,7 @@ if final_file_target:
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                 <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
                                     <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
                                     <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
