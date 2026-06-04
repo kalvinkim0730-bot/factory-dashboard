@@ -199,7 +199,7 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # 주차 타임스탬프 계산
+    # 주차 분리
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
@@ -371,7 +371,7 @@ if final_file_target:
                         time.sleep(1)
                         st.rerun()
 
-    # 🚨 [초경량 풀 와이드 마감 시스템 CSS 고도화 수술 구역]
+    # 초경량 반응형 풀와이드 마감 스타일 CSS 주입
     st.markdown("""
         <style>
             .floating-shortcut-anchor {
@@ -406,15 +406,12 @@ if final_file_target:
             
             div[data-testid="stVerticalBlock"] > div { margin-bottom: 0px !important; padding-bottom: 0px !important; }
             
-            /* 🚨 [오너 명세 완공]: 좌측 라벨 고정 텍스트를 완전히 증발시키고 풀와이드로 사출 */
+            /* 🚨 풀 와이드 및 라벨 완전 거세 프로토콜 고정 */
             div[data-testid="stTextInput"] { 
                 display: block !important;
                 margin-top: 0px !important; margin-bottom: 2px !important; padding: 0px !important;
             }
-            /* 기존 라벨 태그 영역 숨김 */
             div[data-testid="stTextInput"] label { display: none !important; }
-            
-            /* 입력 박스가 가로 전체를 100% 채우도록 밀착 교정 */
             div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div { width: 100% !important; }
             div[data-testid="stTextInput"] input { 
                 background-color: #0f172a !important; color: #38bdf8 !important; 
@@ -491,11 +488,11 @@ if final_file_target:
                                 save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
                                 st.rerun()
                             
-                            # 🚨 [플레이스홀더 고속 이식 공정]: 라벨을 제거하고 박스 내부 힌트로 완전 이식 통합 마감
+                            # 🚨 [문법 오류 완전 진압 조항]: value 값 배선에 누락되었던 3항 연산의 if 구문을 파이썬 정규 구조로 정밀 수선 마감
                             u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0] if memo_tuple[0] != "-" else "", placeholder="1. 카톤코드 입력", key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
                             u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1] if memo_tuple[1] != "-" else "", placeholder="2. 개입수 입력", key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
                             u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2] if memo_tuple[2] != "-" else "", placeholder="3. 제조일 입력", key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
+                            u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3] if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
                             u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4] if memo_tuple[4] != "-" else "", placeholder="5. 생산수량 입력", key=f"inp_s_{section_prefix}_{pure_excel_code}_{idx}")
                             
                             if (u_c_code != (memo_tuple[0] if memo_tuple[0] != "-" else "") or 
@@ -553,12 +550,13 @@ if final_file_target:
                         
                         if (u_c_code != (memo_tuple[0] if memo_tuple[0] != "-" else "") or 
                             u_pack_qty != (memo_tuple[1] if memo_tuple[1] != "-" else "") or 
+                            
                             u_m_date != (memo_tuple[2] if memo_tuple[2] != "-" else "") or 
                             u_m_qty != (memo_tuple[3] if memo_tuple[3] != "-" else "") or 
                             u_p_qty != (memo_tuple[4] if memo_tuple[4] != "-" else "")):
                             save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
                             st.rerun()
-                        st.markdown('<div style="margin-dimensions:8px;"></div>', unsafe_allow_html=True)
+                        st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
 
     if not df_delayed.empty:
         st.markdown("""<div style='margin-top:20px; border-bottom: 4px solid #ff0000; padding-bottom:5px;'><h2 style='color:#ff4d4d; font-weight:bold;'>⚠️ FINE FORMULATION 생산 스케줄 지연 알림 리스트</h2></div>""", unsafe_allow_html=True)
