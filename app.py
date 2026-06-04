@@ -19,7 +19,7 @@ MASTER_PASSWORD = "Fineformulation"
 ENTRY_SECURITY_CODE = "1234"      # [대표님 지정 핵심 보안 코드]
 SESSION_TIMEOUT_SEC = 300          # [대표님 지정: 열람 유효시간 5분 (300초)]
 
-# [오너 지시 정규식 핵심 축]
+# [오너 지시 정규식 핵심 축]: 띄어쓰기, 언더바 다 무시하고 오직 앞자리 순수 6자리 코드만 정밀 추출
 def extract_pure_6_code(text):
     if not text:
         return ""
@@ -27,8 +27,7 @@ def extract_pure_6_code(text):
     match = re.search(r'(\d{5}[A-Z])', cleaned)
     return match.group(1) if match else ""
 
-# 이미지 인코딩만 가볍게 세션 유지
-@st.cache_resource
+# [대표님 명세 1순위 조항]: 로컬 저장 파일을 1순위로 호출
 def get_saved_local_image_base64(pure_code):
     pure_code_clean = str(pure_code).strip().upper()
     target_path = f"{pure_code_clean}.png"
@@ -76,7 +75,9 @@ def save_production_note(pure_code, memo1, memo2):
 # =========================================================================
 st.set_page_config(layout="wide", page_title="생산 스케줄 마스터 데이터 경영 대시보드")
 
+# ---------------------------------------------------------------------
 # [🚨 실시간 사용 감지 5분 연장 엔진]
+# ---------------------------------------------------------------------
 if "app_unlocked" not in st.session_state:
     st.session_state["app_unlocked"] = False
 if "unlock_time" not in st.session_state:
@@ -93,29 +94,52 @@ if st.session_state["app_unlocked"] and st.session_state["unlock_time"] is not N
     else:
         st.session_state["unlock_time"] = time.time()
 
+# ---------------------------------------------------------------------
 # [🔒 게이트웨이 정문 차단막 인터페이스]
+# ---------------------------------------------------------------------
 if not st.session_state["app_unlocked"]:
     st.markdown("""
         <style>
             .stApp { background-color: #0f172a !important; }
-            .security-gate { text-align: center; margin-top: 15vh; padding: 40px; background-color: #1e2530; border: 2px solid #38bdf8; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7); max-width: 500px; margin-left: auto; margin-right: auto; }
+            .security-gate {
+                text-align: center;
+                margin-top: 15vh;
+                padding: 40px;
+                background-color: #1e2530;
+                border: 2px solid #38bdf8;
+                border-radius: 16px;
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+                max-width: 500px;
+                margin-left: auto;
+                margin-right: auto;
+            }
         </style>
     """, unsafe_allow_html=True)
-    st.markdown('<div class="security-gate"><h1 style="color: #38bdf8; font-size: 28px; font-weight: bold; margin-bottom: 10px;">🔒 FINE FORMULATION</h1><p style="color: #94a3b8; font-size: 15px; margin-bottom: 25px;">본 시스템은 기업 기밀 자산 보호 구역입니다.<br>열람 유효시간은 5분이며, <b>사용 중일 경우 실시간으로 자동 연장</b>됩니다.</p></div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+        <div class="security-gate">
+            <h1 style="color: #38bdf8; font-size: 28px; font-weight: bold; margin-bottom: 10px;">🔒 FINE FORMULATION</h1>
+            <p style="color: #94a3b8; font-size: 15px; margin-bottom: 25px;">본 시스템은 기업 기밀 자산 보호 구역입니다.<br>열람 유효시간은 5분이며, <b>사용 중일 경우 실시간으로 자동 연장</b>됩니다.</p>
+        </div>
+    """, unsafe_allow_html=True)
     
     cols = st.columns([1, 2, 1])
     with cols[1]:
         input_gate_code = st.text_input("🔑 보안 코드 입력 (Security Code)", type="password", key="gate_code_input")
+        
         if input_gate_code == ENTRY_SECURITY_CODE:
             st.session_state["app_unlocked"] = True
             st.session_state["unlock_time"] = time.time()
             st.success("🔓 자격 증명이 확인되었습니다. 시스템을 개방합니다.")
             time.sleep(0.5)
             st.rerun()
+        elif input_gate_code != "":
+            st.error("❌ 보안 코드가 올바르지 않습니다. 접근이 거부되었습니다.")
+            
     st.stop()
 
 # ---------------------------------------------------------------------
-# [🔓 마스터 대시보드 코어]
+# [🔓 1234 통과 시 오픈되는 마스터 대시보드 코어]
 # ---------------------------------------------------------------------
 has_saved_file = os.path.exists(SAVED_EXCEL_PATH)
 final_file_target = SAVED_EXCEL_PATH if has_saved_file else None
@@ -128,7 +152,9 @@ with st.sidebar:
     is_authenticated = (input_password == MASTER_PASSWORD)
 
     st.markdown("---")
+    st.write("📂 **새로운 스케줄 파일 업로드 / 교체**")
     uploaded_file = st.file_uploader("여기에 엑셀 파일을 드래그 앤 드롭 하세요.", type=["xlsx", "xls"], label_visibility="collapsed")
+    
     if uploaded_file and is_authenticated:
         with open(SAVED_EXCEL_PATH, "wb") as f:
             f.write(uploaded_file.getbuffer())
@@ -136,28 +162,37 @@ with st.sidebar:
         time.sleep(1)
         st.rerun()
         
+    st.markdown("---")
     if st.button("🔒 대시보드 즉시 잠금 (로그아웃)", use_container_width=True):
         st.session_state["app_unlocked"] = False
         st.session_state["unlock_time"] = None
         st.rerun()
 
 if final_file_target:
-    # 🚨 데이터 왜곡 주범인 모든 캐싱 테그 전면 영구 삭제 및 날것의 로우 데이터 로드
+    # usecols 완전 거세 후 무조건 순수 전체 행렬 구조 로딩
     raw_df = pd.read_excel(final_file_target, header=None)
     
+    start_row_idx = 0
+    for idx, row in raw_df.iterrows():
+        row_str_list = [str(cell) for cell in row.dropna().tolist()]
+        combined_row_text = "".join(row_str_list)
+        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
+            start_row_idx = idx + 1
+            break
+            
+    # [🚨 대표님 오더 지정 절대 열 직통 동기화 배선 프로토콜]
+    # 오타가 터졌던 매핑 오류 구역을 온전히 raw_df 단일 변수로만 묶어 원천 봉쇄했습니다.
+    # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
     clean_data_list = []
-    for idx in range(len(raw_df)):
-        row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 21: # U열 유효크기 방어막
+    for idx in range(start_row_idx, len(raw_df)):
+        row_cells = raw_df.iloc[idx]  # 🚨 오타가 터졌던 변수명 완벽 수정 완료
+        if len(row_cells) < 21:  # U열 범위 안전 확인
             continue
             
-        # U열(20) 생산일자가 포착되는 생산 라인업 실물 로우 데이터만 걸러냅니다.
-        p_date = pd.to_datetime(row_cells[20], errors='coerce')
-        if pd.isna(p_date): # 문자열 헤더라인 터짐 차단용 필터링
+        p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
+        if pd.isna(p_date): # 문자열 헤더라인 터짐 차단용 예외 필터링
             continue
             
-        # [🚨 대표님 기획 오더 1순위 조항: 절대 알파벳 고유 주소 직통 매핑 적용]
-        # A=0(코드), C=2(카테고리), F=5(가격표 유무), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량)
         clean_data_list.append({
             'item_code': str(row_cells[0]).strip(),     
             'category': str(row_cells[2]).strip(),      
@@ -173,7 +208,7 @@ if final_file_target:
     df = pd.DataFrame(clean_data_list)
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 🚨 [공백 데이터 정화]: 비어있는 데이터는 무조건 대표님 지시대로 '-' 처리
+    # 🚨 [공백 데이터 왜곡 차단 마감]: nan, 빈 칸은 대표님 지시대로 '-' 처리
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
         df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
@@ -334,7 +369,7 @@ if final_file_target:
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
+                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                     <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
                                         <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
                                         <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
@@ -383,15 +418,4 @@ if final_file_target:
                         memo_tuple = saved_notes.get(pure_excel_code, ("", ""))
                         key_m1 = f"input_m1_oth_{pure_excel_code}_{idx}"
                         user_m1 = st.text_input(label=f"T1_{pure_excel_code}_oth", value=memo_tuple[0], key=key_m1, placeholder="📋 특기사항 1 입력 후 Enter", label_visibility="collapsed")
-                        key_m2 = f"input_m2_oth_{pure_excel_code}_{idx}"
-                        user_m2 = st.text_input(label=f"T2_{pure_excel_code}_oth", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
-                        if user_m1 != memo_tuple[0] or user_m2 != memo_tuple[1]:
-                            save_production_note(pure_excel_code, user_m1, user_m2)
-                            st.rerun()
-                        st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
-
-    render_schedule_grid(df_1week, "📅 1주 차 생산 스케줄 대쉬보드", "w1")
-    render_schedule_grid(df_2weeks, "📅 2주 차 생산 스케줄 대쉬보드", "w2")
-
-else:
-    st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
+                        key_m2 = f"input
