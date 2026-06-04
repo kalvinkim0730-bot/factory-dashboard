@@ -174,29 +174,51 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # 🚨 [대수술 완공]: 임의 압축(usecols)을 전면 제거하고 U열 이상 전체 영역을 정직하게 로드합니다.
-    raw_df = pd.read_excel(final_file_target, header=None)
-    if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
-        raw_df = raw_df.iloc[1:]
+    # 🚨 [뒤틀림 주범 사살]: 열 압축(usecols)을 완전히 삭제하고, 원본 전체 데이터를 정직하게 로드합니다.
+    raw_excel_data = pd.read_excel(final_file_target, header=None)
+    
+    # "일정, 코드" 단어가 섞여 있는 진짜 타이틀 행의 위치를 역추적하여 데이터 시작점을 잡습니다.
+    start_row_idx = 0
+    for idx, row in raw_excel_data.iterrows():
+        row_str_list = [str(cell) for cell in row.dropna().tolist()]
+        combined_row_text = "".join(row_str_list)
+        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
+            start_row_idx = idx + 1
+            break
+            
+    # [🚨 대표님 지정 오더 알파벳 열 1:1 강제 동기화 배선 프로토콜]:
+    # 인덱스 규칙 고정: A=0, C=2, F=5, K=10, L=11, M=12, O=14, Q=16, U=20
+    clean_data_list = []
+    for idx in range(start_row_idx, len(raw_excel_data)):
+        row_cells = raw_excel_data.iloc[idx]
+        if len(row_cells) < 21:  # U열 범위 안전 확인
+            continue
+            
+        p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 (생산일자)
+        if pd.isna(p_date): # 정상 날짜가 없는 공백 행 필터링 탈거
+            continue
+            
+        clean_data_list.append({
+            'item_code': str(row_cells[0]).strip(),     # A열 (품목코드)
+            'category': str(row_cells[2]).strip(),      # C열 (카테고리)
+            'price_tag': str(row_cells[5]).strip(),     # F열 (가격표 유무)
+            'po_number': str(row_cells[10]).strip(),    # K열 (PO 번호)
+            'bag_number': str(row_cells[11]).strip(),   # L열 (Bag 번호)
+            'volume': str(row_cells[12]).strip(),       # M열 (아이템 용량)
+            'product_name': str(row_cells[14]).strip(), # O열 (품목명)
+            'quantity': row_cells[16],                  # Q열 (생산 수량)
+            'production_date': p_date
+        })
         
-    # 🚨 [대표님 오더 지정 절대 열 직통 매핑 교정]
-    # 알파벳 절대 위치: A=0, C=2, F=5, K=10, L=11, M=12, O=14, P=15, U=20
-    df = pd.DataFrame()
-    df['item_code'] = raw_df.iloc[:, 0].astype(str).str.strip()        # A열 (품목코드)
-    df['category'] = raw_df.iloc[:, 2].astype(str).str.strip()         # C열 (카테고리)
-    df['price_tag'] = raw_df.iloc[:, 5].astype(str).str.strip()        # F열 (가격표 유무)
-    df['po_number'] = raw_df.iloc[:, 10].astype(str).str.strip()       # K열 (PO 번호)
-    df['bag_number'] = raw_df.iloc[:, 11].astype(str).str.strip()      # L열 (Bag#)
-    df['volume'] = raw_df.iloc[:, 12].astype(str).str.strip()          # M열 (용량)
-    df['product_name'] = raw_df.iloc[:, 14].astype(str).str.strip()    # O열 (품목명)
-    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 15], errors='coerce').fillna(0).astype(int) # P열 (수량)
-    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce') # U열 (날짜)
+    df = pd.DataFrame(clean_data_list)
     
-    df = df.dropna(subset=['production_date'])
+    # 0개나 수십억 개로 튀는 데이터 캐스팅 충돌 원천 방어 패치
+    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 🚨 [공백 왜곡 원천 차단]: 해당 셀에 데이터가 비어있으면 대표님 지시대로 '-'로 완벽하게 대치
+    # 🚨 [공백 데이터 왜곡 차단]: nan, 빈 칸, 공백 문자열은 무조건 대표님 지시대로 '-' 처리
     for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
+        df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
     
     # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
@@ -262,10 +284,7 @@ if final_file_target:
             
             for col_num, h_text in enumerate(headers, 1):
                 h_cell = ws.cell(row=r_idx, column=col_num, value=h_text)
-                h_cell.font = font_header
-                h_cell.fill = fill_header
-                h_cell.alignment = align_center
-                h_cell.border = border_all
+                h_cell.font = font_header; h_cell.fill = fill_header; h_cell.alignment = align_center; h_cell.border = border_all
             ws.row_dimensions[r_idx].height = 25
             r_idx += 1
             
@@ -276,9 +295,7 @@ if final_file_target:
                     ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=11)
                     g_cell = ws.cell(row=r_idx, column=1)
                     g_cell.value = f"🌿 {cate.upper()} CARE LINEUP"
-                    g_cell.font = font_group
-                    g_cell.fill = fill_group
-                    g_cell.alignment = align_left
+                    g_cell.font = font_group; g_cell.fill = fill_group; g_cell.alignment = align_left
                     for c_num in range(1, 12):
                         ws.cell(row=r_idx, column=c_num).border = border_all
                     ws.row_dimensions[r_idx].height = 24
@@ -291,43 +308,30 @@ if final_file_target:
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
-                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M열 대조 연동
-                        
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # P열 대조 연동
-                        qty_cell.number_format = '#,##0'
-                        qty_cell.alignment = align_right
-                        
-                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K열 대조 연동
-                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L열 대조 연동
-                        ws.cell(row=r_idx, column=9, value=r['price_tag'])  # F열 대조 연동
+                        ws.cell(row=r_idx, column=5, value=r['volume'])     
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']); qty_cell.number_format = '#,##0'; qty_cell.alignment = align_right
+                        ws.cell(row=r_idx, column=7, value=r['po_number'])  
+                        ws.cell(row=r_idx, column=8, value=r['bag_number']) 
+                        ws.cell(row=r_idx, column=9, value=r['price_tag'])  
                         
                         ws.cell(row=r_idx, column=10, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=11, value=memo_vals[1]).alignment = align_left
                         
                         for c_idx in range(1, 12):
-                            c_cell = ws.cell(row=r_idx, column=c_idx)
-                            c_cell.font = font_data
-                            c_cell.border = border_all
-                            if c_idx != 4 and c_idx != 6 and c_idx != 1 and c_idx != 10 and c_idx != 11:
+                            c_cell = ws.cell(row=r_idx, column=c_idx); c_cell.font = font_data; c_cell.border = border_all
+                            if c_idx not in [4, 6, 10, 11]:
                                 c_cell.alignment = align_center
                             elif c_idx == 1:
                                 c_cell.alignment = align_center
                                 
                         ws.row_dimensions[r_idx].height = 35
                         img_path = f"{p_code}.png"
-                        
                         if os.path.exists(img_path):
                             try:
-                                pil_img = PILImage.open(img_path)
-                                pil_img.thumbnail((50, 45))
-                                
-                                img_stream = io.BytesIO()
-                                pil_img.save(img_stream, format="PNG")
-                                img_stream.seek(0)
-                                
-                                xl_img = OpenpyxlImage(img_stream)
-                                ws.add_image(xl_img, f"B{r_idx}")
-                            except Exception:
+                                pil_img = PILImage.open(img_path); pil_img.thumbnail((50, 45))
+                                img_stream = io.BytesIO(); pil_img.save(img_stream, format="PNG"); img_stream.seek(0)
+                                xl_img = OpenpyxlImage(img_stream); ws.add_image(xl_img, f"B{r_idx}")
+                            except:
                                 pass
                         r_idx += 1
             return r_idx + 2
@@ -335,33 +339,16 @@ if final_file_target:
         next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 라인업 계획 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
         write_week_block(ws, df_2weeks, f"🗓️ 2주 차 생산 라인업 계획 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
         
-        ws.column_dimensions['A'].width = 15
-        ws.column_dimensions['B'].width = 12
-        ws.column_dimensions['C'].width = 16
-        ws.column_dimensions['D'].width = 38
-        ws.column_dimensions['E'].width = 12
-        ws.column_dimensions['F'].width = 14
-        ws.column_dimensions['G'].width = 16
-        ws.column_dimensions['H'].width = 14
-        ws.column_dimensions['I'].width = 14
-        ws.column_dimensions['J'].width = 25
-        ws.column_dimensions['K'].width = 25
-        
+        for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 25), ('K', 25)]:
+            ws.column_dimensions[l].width = w
         wb.save(output)
         return output.getvalue()
 
     with st.sidebar:
         st.markdown("---")
         st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
-        
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
-        st.download_button(
-            label="📊 주차별 분리 마스터 엑셀 다운로드",
-            data=split_excel_bytes,
-            file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
         st.markdown("---")
         st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업</div>', unsafe_allow_html=True)
@@ -371,131 +358,50 @@ if final_file_target:
                 sync_success_count = 0
                 status_placeholder = st.empty()
                 status_placeholder.info("🔄 마스터 엑셀에서 순수 6자리 코드 스캔 중...")
-                
                 raw_excel_data = pd.read_excel(SAVED_EXCEL_PATH, header=None)
                 target_pure_codes = []
                 for col_idx in raw_excel_data.columns:
                     cell_values = raw_excel_data[col_idx].dropna().astype(str)
                     for val in cell_values:
                         p_code = extract_pure_6_code(val)
-                        if p_code:
-                            target_pure_codes.append(p_code)
+                        if p_code: target_pure_codes.append(p_code)
                 target_pure_codes = list(set(target_pure_codes))
                 
                 if len(target_pure_codes) > 0:
                     TRELLO_API_KEY = st.secrets["TRELLO_API_KEY"]
                     TRELLO_TOKEN = st.secrets["TRELLO_TOKEN"]
                     TRELLO_BOARD_ID = st.secrets["TRELLO_BOARD_ID"]
+                    secured_headers = {"Authorization": f'OAuth oauth_consumer_key="{TRELLO_API_KEY}", oauth_token="{TRELLO_TOKEN}"', "User-Agent": "Mozilla/5.0"}
                     
-                    secured_headers = {
-                        "Authorization": f'OAuth oauth_consumer_key="{TRELLO_API_KEY}", oauth_token="{TRELLO_TOKEN}"',
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                    }
-                    
-                    status_placeholder.info(f"🛰️ 오리지널 썸네일 수집 허브 연동 시작...")
                     url = f"https://api.trello.com/1/boards/{TRELLO_BOARD_ID}/cards"
-                    params = {'key': TRELLO_API_KEY, 'token': TRELLO_TOKEN, 'attachments': 'true', 'attachment_fields': 'all', 'limit': '1000'}
-                    card_res = requests.get(url, headers=secured_headers, params=params, timeout=25)
-                    
+                    card_res = requests.get(url, headers=secured_headers, params={'key': TRELLO_API_KEY, 'token': TRELLO_TOKEN, 'attachments': 'true', 'limit': '1000'}, timeout=25)
                     if card_res.status_code == 200:
-                        all_cards = card_res.json()
-                        progress_bar = st.progress(0)
-                        total_items = len(target_pure_codes)
-                        
+                        all_cards = card_res.json(); progress_bar = st.progress(0); total_items = len(target_pure_codes)
                         for i, code_key in enumerate(target_pure_codes):
-                            code_key_clean = str(code_key).strip().upper()
-                            trello_url = None
-                            
-                            status_placeholder.info(f"⏳ 썸네일 정밀 매칭 중: [{code_key_clean}] ({i+1}/{total_items}) | 현재까지 {sync_success_count}개 박제 성공")
-                            
+                            code_key_clean = str(code_key).strip().upper(); trello_url = None
                             for card in all_cards:
-                                card_name_clean = card.get('name', '').replace(" ", "").replace("_", "").upper()
-                                if code_key_clean in card_name_clean:
+                                if code_key_clean in card.get('name', '').replace(" ", "").upper():
                                     cover = card.get('cover', {})
-                                    if cover and cover.get('scaled'):
-                                        scaled_images = cover.get('scaled', [])
-                                        if scaled_images:
-                                            trello_url = scaled_images[-1].get('url')
-                                            
-                                if not trello_url:
-                                    attachments = card.get('attachments', [])
-                                    if attachments:
-                                        for att in attachments:
-                                            a_url = att.get('url', '')
-                                            a_url_lower = a_url.lower()
-                                            if any(skip in a_url_lower for skip in ['label', 'cap', 'size', 'spec', '도면']):
-                                                continue
-                                            if any(ext in a_url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-                                                trello_url = a_url
-                                                break
-                                if trello_url:
-                                    break
-                            
+                                    if cover and cover.get('scaled'): trello_url = cover.get('scaled', [])[-1].get('url')
                             if trello_url:
                                 try:
                                     img_res = requests.get(trello_url, headers=secured_headers, timeout=12)
                                     if img_res.status_code == 200:
-                                        target_save_file = f"{code_key_clean}.png"
-                                        with open(target_save_file, "wb") as img_f:
-                                            img_f.write(img_res.content)
+                                        with open(f"{code_key_clean}.png", "wb") as img_f: img_f.write(img_res.content)
                                         sync_success_count += 1
-                                except Exception:
-                                    pass
+                                except: pass
                             progress_bar.progress(int((i + 1) / total_items * 100))
-                        
-                        status_placeholder.empty()
-                        st.markdown(f'<div style="color:#4ade80; font-size:16px; font-weight:bold; background-color:#064e3b; padding:12px; border-radius:8px; margin-top:10px;">🎯 백업 마감 결과: 총 {sync_success_count}개 품목의 공식 정형 썸네일 다른 이름 저장 성공! 바로 F5를 눌러 확인하십시오.</div>', unsafe_allow_html=True)
-                    else:
-                        status_placeholder.empty()
-                        st.error("❌ 트렐로 API 통신 세션 인증 실패.")
-                else:
-                    status_placeholder.empty()
-                    st.error("❌ 마스터 엑셀에서 코드를 식별하지 못했습니다.")
-            else:
-                st.error("❌ 데이터 제어 승인 암호가 일치하지 않습니다.")
+                        st.rerun()
 
-    # ---------------------------------------------------------------------
-    # 5. 디자인 격자 프론트엔드 스타일 마감 구역
-    # ---------------------------------------------------------------------
+    # 디자인 프론트엔드 스타일 마감 구역
     st.markdown("""
         <style>
-            .owner-square-frame {
-                width: 100% !important;
-                aspect-ratio: 1 / 1 !important;
-                background-color: transparent !important;
-                border-radius: 0px !important;
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-                overflow: hidden !important;
-                padding: 5px !important;
-                box-sizing: border-box !important;
-                margin-bottom: 8px !important;
-            }
-            .owner-square-frame img {
-                max-width: 100% !important;
-                max-height: 100% !important;
-                width: auto !important;
-                height: auto !important;
-                object-fit: contain !important;
-            }
-            .owner-info-card-wrap {
-                background-color: #1e2530 !important; 
-                border: 1px solid #2d3748 !important; 
-                border-radius: 14px !important; 
-                padding: 18px !important; 
-                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important;
-                margin-bottom: 8px !important;
-            }
-            .owner-text-row {
-                margin: 0px !important; 
-                padding: 0px !important; 
-                text-align: left !important; 
-                line-height: 1.4 !important;
-            }
+            .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
+            .owner-square-frame img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain !important; }
+            .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
+            .owner-text-row { margin: 0px !important; padding: 0px !important; text-align: left !important; line-height: 1.4 !important; }
             div[data-testid="stTextInput"] { margin-top: 4px !important; padding: 0px !important; }
             div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 8px !important; font-size: 13px !important; height: 36px !important; }
-            div[data-testid="stTextInput"] input:focus { border-color: #38bdf8 !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -505,7 +411,6 @@ if final_file_target:
         
         if not target_df.empty:
             fixed_categories = ["skin", "body", "hair"]
-            
             for cate in fixed_categories:
                 group_df = target_df[target_df['category'].str.lower().str.contains(cate)]
                 if not group_df.empty:
@@ -517,22 +422,16 @@ if final_file_target:
                         
                         with cols[idx % 6]:
                             local_base64_data = get_saved_local_image_base64(pure_excel_code)
+                            st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
-                            if local_base64_data:
-                                st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
-                            else:
-                                st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
-                            
-                            # [🚨 최종 마감 완료]: 원본 뼈대에 맞춰 왜곡 및 밀림 현상을 완벽 박멸하여 정상 출력
+                            # [🚨 대표님 핵심 지시 완결 조립]: 줄바꿈 레이아웃 및 1:1 절대 인덱스 매핑 출력
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
                                     <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
-                                    <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
-                                        <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
-                                        <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
-                                    </div>
+                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
+                                    <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                     <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
@@ -563,20 +462,15 @@ if final_file_target:
                     pure_excel_code = extract_pure_6_code(excel_code)
                     with cols[idx % 6]:
                         local_base64_data = get_saved_local_image_base64(pure_excel_code)
-                        if local_base64_data:
-                            st.html(f'<div class="owner-square-frame"><img src="{local_base64_data}"></div>')
-                        else:
-                            st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
+                        st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                         
                         st.html(f"""
                             <div class="owner-info-card-wrap">
                                 <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
                                 <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
-                                <div style="display:flex !important; justify-content:space-between !important; margin-bottom:5px !important;">
-                                    <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">가격표: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></span>
-                                    <span class="owner-text-row" style="font-size:14px !important; color:#718096 !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></span>
-                                </div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
+                                <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
                                 <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                 <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
