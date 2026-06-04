@@ -174,21 +174,29 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    raw_df = pd.read_excel(final_file_target, usecols="A,C,F,K,L,O,P,U", header=None)
+    # [🚨 오너 지시 핵심 패치 1]: 원본 마스터 엑셀의 데이터 타겟 범위(A부터 U칼럼 전체) 광역 확장 로드
+    raw_df = pd.read_excel(final_file_target, usecols="A:U", header=None)
     if raw_df.iloc[0].astype(str).str.contains('일정|코드|카테고리|Date|Item').any():
         raw_df = raw_df.iloc[1:]
         
+    # [🚨 오너 지시 핵심 패치 2]: 파이썬 알파벳 인덱스 공식 명세에 맞춰 고정 매핑 수술
+    # A=0, C=2, F=5, L=11(Bag#), M=12(용량), O=14(이름), P=15(수량), U=20(날짜)
     df = pd.DataFrame()
     df['item_code'] = raw_df.iloc[:, 0].fillna('-').astype(str).str.strip()
-    df['category'] = raw_df.iloc[:, 1].fillna('기타 카테고리').astype(str).str.strip()
-    df['price_tag'] = raw_df.iloc[:, 2].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
-    df['po_number'] = raw_df.iloc[:, 3].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
-    df['bag_number'] = raw_df.iloc[:, 4].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
-    df['product_name'] = raw_df.iloc[:, 5].fillna('-').astype(str).str.strip()
-    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 6], errors='coerce').fillna(0).astype(int)
-    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 7], errors='coerce')
+    df['category'] = raw_df.iloc[:, 2].fillna('기타 카테고리').astype(str).str.strip()
+    df['price_tag'] = raw_df.iloc[:, 5].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
+    df['po_number'] = raw_df.iloc[:, 14].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
     
-    df['volume'] = df['product_name'].apply(lambda x: re.search(r'(\d+ml|\d+oz|\d+g)', x, re.IGNORECASE).group(1) if re.search(r'(\d+ml|\d+oz|\d+g)', x, re.IGNORECASE) else "500ml")
+    # 대표님 신규 배선 명세: Bag# 은 L칼럼(11번째 인덱스)에서 무결하게 추출
+    df['bag_number'] = raw_df.iloc[:, 11].fillna('-').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
+    
+    df['product_name'] = raw_df.iloc[:, 14].fillna('-').astype(str).str.strip()
+    df['quantity'] = pd.to_numeric(raw_df.iloc[:, 15], errors='coerce').fillna(0).astype(int)
+    df['production_date'] = pd.to_datetime(raw_df.iloc[:, 20], errors='coerce')
+    
+    # 대표님 신규 배선 명세: 용량은 M칼럼(12번째 인덱스)을 다이렉트로 전폭 참조
+    df['volume'] = raw_df.iloc[:, 12].fillna('500ml').astype(str).str.strip().replace(['nan', 'NAN', 'NaN', 'None', ''], '500ml')
+    
     df = df.dropna(subset=['production_date'])
     
     # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
@@ -211,7 +219,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [🚨 오너 지시 핵심 패치: 특기사항 1, 2 칼럼이 추가된 엑셀 컴파일러]
+    # [⚙️ 주차별 분리 마스터 엑셀 컴파일러]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -220,7 +228,6 @@ if final_file_target:
         ws.title = "주차별_생산라인업"
         ws.views.sheetView[0].showGridLines = True
         
-        # 디자인 서식 프로토콜 설정
         font_main_title = Font(name="Malgun Gothic", size=14, bold=True, color="FFFFFF")
         font_header = Font(name="Malgun Gothic", size=11, bold=True, color="FFFFFF")
         font_data = Font(name="Malgun Gothic", size=10)
@@ -237,7 +244,6 @@ if final_file_target:
         thin_side = Side(border_style="thin", color="cbd5e1")
         border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         
-        # [🚨 특기사항 1, 2 칼럼 전격 끝단 신설 명세 채결]
         headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "가격표 유무", "특기사항 1", "특기사항 2"]
         categories_order = ["skin", "body", "hair", "기타 카테고리"]
         current_row_idx = 1
@@ -245,7 +251,6 @@ if final_file_target:
         def write_week_block(ws, target_df, week_label_text, start_row):
             r_idx = start_row
             
-            # 주차별 헤드라인 대형 바 마감
             ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=10)
             title_cell = ws.cell(row=r_idx, column=1)
             title_cell.value = week_label_text
@@ -255,7 +260,6 @@ if final_file_target:
             ws.row_dimensions[r_idx].height = 35
             r_idx += 1
             
-            # 테이블 컬럼 인덱스 매핑
             for col_num, h_text in enumerate(headers, 1):
                 h_cell = ws.cell(row=r_idx, column=col_num, value=h_text)
                 h_cell.font = font_header
@@ -265,7 +269,6 @@ if final_file_target:
             ws.row_dimensions[r_idx].height = 25
             r_idx += 1
             
-            # 카테고리 섹션 빌딩
             for cate in categories_order:
                 if cate != "기타 카테고리":
                     cate_df = target_df[target_df['category'].str.lower().str.contains(cate)]
@@ -300,7 +303,6 @@ if final_file_target:
                         ws.cell(row=r_idx, column=7, value=r['po_number'])
                         ws.cell(row=r_idx, column=8, value="유" if str(r['price_tag']).strip() != "-" else "무")
                         
-                        # [🚨 실시간 특기사항 데이터 베이스 연동 매핑 축]
                         ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
                         
@@ -332,10 +334,9 @@ if final_file_target:
                         r_idx += 1
             return r_idx + 2
             
-        next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 라인업 계획 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
-        write_week_block(ws, df_2weeks, f"🗓️ 2주 차 생산 라인업 계획 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
+        next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 계획 수립 명세서 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
+        write_week_block(ws, df_2weeks, f"🗓️ 2주 차 생산 계획 수립 명세서 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
         
-        # 전체 칼럼 레이아웃 너비 밸런싱 최적화
         ws.column_dimensions['A'].width = 15
         ws.column_dimensions['B'].width = 12
         ws.column_dimensions['C'].width = 16
@@ -344,8 +345,8 @@ if final_file_target:
         ws.column_dimensions['F'].width = 14
         ws.column_dimensions['G'].width = 16
         ws.column_dimensions['H'].width = 14
-        ws.column_dimensions['I'].width = 25 # 특기사항 1 폭 마감
-        ws.column_dimensions['J'].width = 25 # 특기사항 2 폭 마감
+        ws.column_dimensions['I'].width = 25
+        ws.column_dimensions['J'].width = 25
         
         wb.save(output)
         return output.getvalue()
@@ -358,7 +359,7 @@ if final_file_target:
         st.download_button(
             label="📊 주차별 분리 마스터 엑셀 다운로드",
             data=split_excel_bytes,
-            file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx",
+            file_name=f"Fine_Formulation_M_L_Fixed_Schedule_{datetime.now().strftime('%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -455,15 +456,14 @@ if final_file_target:
                 st.error("❌ 데이터 제어 승인 암호가 일치하지 않습니다.")
 
     # ---------------------------------------------------------------------
-    # 5. [🚨 오너 지시 핵심 반영]: 배경 검은색 완벽 제거 및 화면 바탕 연동 CSS
+    # 5. 디자인 격자 프론트엔드 스타일 마감 구역
     # ---------------------------------------------------------------------
     st.markdown("""
         <style>
-            /* [핵심 수술 축]: 투명 박스 백그라운드로 전환하여 대시보드 바탕인 다크 네이비(#0f172a 계열)와 100% 카멜레온 동기화 */
             .owner-square-frame {
                 width: 100% !important;
                 aspect-ratio: 1 / 1 !important;
-                background-color: transparent !important; /* 기존 검은색 박스 완벽 제거 및 배경색 투명화 마감 */
+                background-color: transparent !important;
                 border-radius: 0px !important;
                 display: flex !important;
                 justify-content: center !important;
@@ -478,7 +478,7 @@ if final_file_target:
                 max-height: 100% !important;
                 width: auto !important;
                 height: auto !important;
-                object-fit: contain !important; /* 원본 패키지 짤림 0% 전체 노출 스펙 유지 */
+                object-fit: contain !important;
             }
             .owner-info-card-wrap {
                 background-color: #1e2530 !important; 
@@ -524,6 +524,7 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
+                            # [🚨 오너 지시 핵심 마감]: 대시보드 화면 스크린에도 M칼럼의 정밀 용량과 L칼럼의 Bag# 데이터 동시 가독 출력 완료
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -600,4 +601,4 @@ if final_file_target:
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", "w2")
 
 else:
-    st.info("💡 마스터 엑셀 파일 로드 대기중")
+    st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
