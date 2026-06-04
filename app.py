@@ -139,7 +139,7 @@ final_file_target = SAVED_EXCEL_PATH if has_saved_file else None
 
 with st.sidebar:
     st.markdown(f'<div style="color:#ffffff; font-size:15px; font-weight:bold; background-color:#0284c7; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">🟢 시스템 가동 중 (활동 중 자동 연장)</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어 센터</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어</div>', unsafe_allow_html=True)
     
     input_password = st.text_input("🔓 데이터 제어 승인 암호", type="password", key="auth_pwd_input")
     is_authenticated = (input_password == MASTER_PASSWORD)
@@ -324,13 +324,13 @@ if final_file_target:
 
     with st.sidebar:
         st.markdown("---")
-        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 엑셀 데이터 추출</div>', unsafe_allow_html=True)
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
         st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
         st.markdown("---")
-        st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업 센터</div>', unsafe_allow_html=True)
-        if st.button("🔄 현재 스케줄 이미지 서버에 저장", use_container_width=True):
+        st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업</div>', unsafe_allow_html=True)
+        if st.button("🔄 현재 스케줄 제품 이미지 서버에 저장", use_container_width=True):
             if is_authenticated:
                 sync_success_count = 0
                 status_placeholder = st.empty()
@@ -446,7 +446,7 @@ if final_file_target:
     """, unsafe_allow_html=True)
 
     # 🚨 [초고속 HTML 물리 앵커 타겟팅 다이렉트 사출] : 스크롤 유도용 고유 태그 박음질
-    st.markdown('<a href="#current-week-target" class="floating-shortcut-anchor">📅 현재 주차 스케줄 직행</a>', unsafe_allow_html=True)
+    st.markdown('<a href="#current-week-target" class="floating-shortcut-anchor">📅 현재 주차로 이동</a>', unsafe_allow_html=True)
 
     def render_schedule_grid(target_df, title_label, section_prefix, is_completed_tab=False, is_delay_tab=False, inject_anchor=False):
         if is_delay_tab and target_df.empty:
@@ -572,7 +572,7 @@ if final_file_target:
     # 최상단 지연 아이템 리스트
     if not df_delayed.empty:
         st.markdown("""<div style='margin-top:20px; border-bottom: 4px solid #ff0000; padding-bottom:5px;'><h2 style='color:#ff4d4d; font-weight:bold;'>⚠️ FINE FORMULATION 생산 스케줄 지연 알림 리스트</h2></div>""", unsafe_allow_html=True)
-        render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목 (현장 즉시 독촉 필요)", "delayed", is_delay_tab=True)
+        render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목", "delayed", is_delay_tab=True)
         st.markdown("""<div style='margin-top:30px; margin-bottom:30px; border-bottom: 2px dashed #475569;'></div>""", unsafe_allow_html=True)
 
     # 🚨 [1주차 구역에 앵커 스위치 True 주입] : 버튼 클릭 시 이 위치로 화면이 스무스하게 스크롤다운됩니다.
