@@ -41,7 +41,7 @@ def get_saved_local_image_base64(pure_code):
     return None
 
 # ---------------------------------------------------------------------
-# [📝 5대 핵심 입력 데이터 멀티 메모리 영구 저장 엔진]
+# [📝 5대 입력 데이터 + 완료 상태 비트 영구 저장 엔진 개조 완료]
 # ---------------------------------------------------------------------
 def load_production_notes():
     notes = {}
@@ -50,26 +50,28 @@ def load_production_notes():
             with open(NOTES_DB_PATH, "r", encoding="utf-8") as f:
                 for line in f:
                     if "::" in line:
-                        parts = line.split("::", 5)
+                        parts = line.split("::", 6)
                         code = parts[0].strip()
                         c_code = parts[1].strip() if len(parts) > 1 else ""
                         pack_qty = parts[2].strip() if len(parts) > 2 else ""
                         m_date = parts[3].strip() if len(parts) > 3 else ""
                         m_qty = parts[4].strip() if len(parts) > 4 else ""
                         p_qty = parts[5].strip() if len(parts) > 5 else ""
-                        notes[code] = (c_code, pack_qty, m_date, m_qty, p_qty)
+                        # 6번째 방에 생산완료 체크 여부(Y/N) 저장 (기본값 N)
+                        is_done = parts[6].strip() if len(parts) > 6 else "N"
+                        notes[code] = (c_code, pack_qty, m_date, m_qty, p_qty, is_done)
         except Exception:
             pass
     return notes
 
-def save_production_note(pure_code, c_code, pack_qty, m_date, m_qty, p_qty):
+def save_production_note(pure_code, c_code, pack_qty, m_date, m_qty, p_qty, is_done="N"):
     notes = load_production_notes()
-    notes[pure_code] = (c_code.strip(), pack_qty.strip(), m_date.strip(), m_qty.strip(), p_qty.strip())
+    notes[pure_code] = (c_code.strip(), pack_qty.strip(), m_date.strip(), m_qty.strip(), p_qty.strip(), is_done.strip())
     try:
         with open(NOTES_DB_PATH, "w", encoding="utf-8") as f:
             for code, values in notes.items():
                 if any(values):
-                    f.write(f"{code}::{values[0]}::{values[1]}::{values[2]}::{values[3]}::{values[4]}\n")
+                    f.write(f"{code}::{values[0]}::{values[1]}::{values[2]}::{values[3]}::{values[4]}::{values[5]}\n")
     except Exception:
         pass
 
@@ -169,7 +171,7 @@ if final_file_target:
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
         row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 22:  # V열 범위 안전 확인
+        if len(row_cells) < 22:
             continue
             
         p_date = pd.to_datetime(row_cells[21], errors='coerce') 
@@ -198,7 +200,7 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # [V열 생산계획 기준 주차 분리]
+    # [V열 생산계획 기준 주차 분리 데이터 처리]
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
@@ -212,8 +214,18 @@ if final_file_target:
     
     saved_notes = load_production_notes()
 
+    # 🚨 [생산 완료 필터 전격 설계]: DB에서 Y로 기록된 애들은 주차 불문하고 따로 모아서 맨 아래로 이동
+    completed_codes = [code for code, vals in saved_notes.items() if len(vals) > 5 and vals[5] == "Y"]
+    
+    # 상단 1, 2주차 대시보드에서는 완료된 코드를 보이지 않도록 격리(제외) 처리
+    df_1week_active = df_1week[~df_1week['item_code'].apply(extract_pure_6_code).isin(completed_codes)].copy()
+    df_2weeks_active = df_2weeks[~df_2weeks['item_code'].apply(extract_pure_6_code).isin(completed_codes)].copy()
+    
+    # 아래 완료 탭에 들어갈 종합 데이터셋 (주차가 지나도 계속 축적되어 유지)
+    df_completed_pool = df[df['item_code'].apply(extract_pure_6_code).isin(completed_codes)].copy()
+
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 다운로드 파일 빌더]
+    # [📊 주차별 분리형 마스터 엑셀 컴파일러]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -362,10 +374,8 @@ if final_file_target:
                         st.success(f"🎯 총 {sync_success_count}개 품목의 공식 썸네일 다운로드 성공!")
                         time.sleep(1)
                         st.rerun()
-            else:
-                st.error("❌ 승인 암호가 올바르지 않습니다.")
 
-    # 🚨 [하드코어 가로 정렬 및 여백 완전 박살 CSS 엔지니어링]
+    # 🚨 [가로 정렬 및 초밀착 마감 디자인 시스템]
     st.markdown("""
         <style>
             .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
@@ -373,54 +383,32 @@ if final_file_target:
             .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
             .owner-text-row { margin: 0px !important; padding: 0px !important; text-align: left !important; line-height: 1.4 !important; }
             
-            /* 🚨 [오너 발주] : 줄바꿈을 완벽히 없애고 가로로 1:1 따닥따닥 매칭 처리 */
             div[data-testid="stVerticalBlock"] > div { margin-bottom: 0px !important; padding-bottom: 0px !important; }
             
-            /* 인풋 컴포넌트 내부 레이아웃을 Flex를 통해 가로로 강제 재조립 */
+            /* 가로형 입력칸 정렬 규격 */
             div[data-testid="stTextInput"] { 
-                display: flex !important; 
-                flex-direction: row !important; 
-                align-items: center !important; 
-                justify-content: space-between !important;
-                margin-top: 0px !important; 
-                margin-bottom: 1px !important; 
-                padding: 0px !important; 
-                gap: 10px !important;
+                display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important;
+                margin-top: 0px !important; margin-bottom: 1px !important; padding: 0px !important; gap: 10px !important;
             }
-            
-            /* 라벨 속성 가로형 배치 프로토콜 (줄바꿈 원천 차단 및 고정폭 부여) */
             div[data-testid="stTextInput"] label { 
-                font-size: 13px !important; 
-                color: #94a3b8 !important; 
-                font-weight: bold !important; 
-                min-width: 80px !important; 
-                max-width: 80px !important;
-                text-align: left !important;
-                margin: 0px !important; 
-                padding: 0px !important;
-                white-space: nowrap !important;
+                font-size: 13px !important; color: #94a3b8 !important; font-weight: bold !important; min-width: 80px !important; max-width: 80px !important;
+                text-align: left !important; margin: 0px !important; padding: 0px !important; white-space: nowrap !important;
             }
+            div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div { flex-grow: 1 !important; width: 100% !important; }
+            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 28px !important; padding: 2px 8px !important; }
             
-            /* 가로 맞춤 입력창 슬롯 최적화 공정 */
-            div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div {
-                flex-grow: 1 !important;
-                width: 100% !important;
-            }
-            div[data-testid="stTextInput"] input { 
-                background-color: #0f172a !important; 
-                color: #38bdf8 !important; 
-                border: 1px solid #334155 !important; 
-                border-radius: 6px !important; 
-                font-size: 13px !important; 
-                height: 28px !important; 
-                padding: 2px 8px !important; 
-            }
+            /* 🚨 [체크박스 오너 특화 초밀착 CSS 공정] */
+            div[data-testid="stCheckbox"] { background-color: #111827 !important; border: 1px dashed #ef4444 !important; border-radius: 8px !important; padding: 6px 12px !important; margin-top: 5px !important; margin-bottom: 8px !important; }
+            div[data-testid="stCheckbox"] label span { color: #f87171 !important; font-weight: bold !important; font-size: 14px !important; }
             
             .element-container { margin-bottom: 0px !important; padding-bottom: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    def render_schedule_grid(target_df, title_label, section_prefix):
+    # ---------------------------------------------------------------------
+    # [🎨 핵심 그리드 컴포넌트 마스터 렌더러]
+    # ---------------------------------------------------------------------
+    def render_schedule_grid(target_df, title_label, section_prefix, is_completed_tab=False):
         st.markdown("---")
         st.subheader(title_label)
         
@@ -455,9 +443,21 @@ if final_file_target:
                                 </div>
                             """)
                             
-                            # 🚨 [가로형 인터페이스 정밀 매핑]
-                            memo_tuple = saved_notes.get(pure_excel_code, ("", "", "", "", ""))
+                            # 데이터 및 체크박스 상태 로드
+                            memo_tuple = saved_notes.get(pure_excel_code, ("-", "-", "-", "-", "-", "N"))
+                            current_check_state = True if memo_tuple[5] == "Y" else False
                             
+                            # 🚨 [완료 처리 체크박스 시스템 공정 이식]
+                            check_label = "✅ 생산 완료 처리됨" if is_completed_tab else "🚨 완료 시 체크 (하단 이동)"
+                            user_checked = st.checkbox(label=check_label, value=current_check_state, key=f"chk_{section_prefix}_{pure_excel_code}_{idx}")
+                            
+                            # 체크박스 트리거 발동 시 영구 DB에 즉각 업데이트 후 화면 재배치
+                            if user_checked != current_check_state:
+                                next_status = "Y" if user_checked else "N"
+                                save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
+                                st.rerun()
+                            
+                            # 가로형 5대 입력 위젯
                             u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
                             u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
                             u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
@@ -466,11 +466,12 @@ if final_file_target:
                             
                             if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
                                 u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
-                                save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty)
+                                save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
                                 st.rerun()
                                 
                             st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
             
+            # 기타 카테고리
             other_df = target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
             if not other_df.empty:
                 st.markdown('<div style="font-size:20px; font-weight:bold; color:#94a3b8; padding:6px 12px; background-color:#0f172a; border-left:5px solid #94a3b8; border-radius:4px; margin-top:25px; margin-bottom:15px;">📦 기타 카테고리 Lineup</div>', unsafe_allow_html=True)
@@ -497,7 +498,16 @@ if final_file_target:
                                 </div>
                             </div>
                         """)
-                        memo_tuple = saved_notes.get(pure_excel_code, ("", "", "", "", ""))
+                        memo_tuple = saved_notes.get(pure_excel_code, ("-", "-", "-", "-", "-", "N"))
+                        current_check_state = True if memo_tuple[5] == "Y" else False
+                        
+                        check_label = "✅ 생산 완료 처리됨" if is_completed_tab else "🚨 완료 시 체크 (하단 이동)"
+                        user_checked = st.checkbox(label=check_label, value=current_check_state, key=f"chk_oth_{pure_excel_code}_{idx}")
+                        if user_checked != current_check_state:
+                            next_status = "Y" if user_checked else "N"
+                            save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
+                            st.rerun()
+                            
                         u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_oth_{pure_excel_code}_{idx}")
                         u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1], key=f"inp_p_oth_{pure_excel_code}_{idx}")
                         u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2], key=f"inp_d_oth_{pure_excel_code}_{idx}")
@@ -506,12 +516,17 @@ if final_file_target:
                         
                         if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
                             u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
-                            save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty)
+                            save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
                             st.rerun()
                         st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
 
-    render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1")
-    render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
+    # 상단: 가동 중인 스케줄 라인 출력
+    render_schedule_grid(df_1week_active, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1")
+    render_schedule_grid(df_2weeks_active, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
+    
+    # 🚨 [생산완료 홀딩 구역 완공]: 주차가 지나도 체크가 풀리지 않는 한 영구 소정 정크 아키텍처
+    st.markdown("""<div style='margin-top:80px; border-bottom: 3px dashed #10b981;'></div>""", unsafe_allow_html=True)
+    render_schedule_grid(df_completed_pool, f"✅ 실시간 생산 완료 영구 보존 라인업 (주차 무관 상시 보존)", "done", is_completed_tab=True)
 
 else:
     st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
