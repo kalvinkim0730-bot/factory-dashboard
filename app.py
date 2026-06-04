@@ -191,7 +191,7 @@ if final_file_target:
     df['volume'] = df['product_name'].apply(lambda x: re.search(r'(\d+ml|\d+oz|\d+g)', x, re.IGNORECASE).group(1) if re.search(r'(\d+ml|\d+oz|\d+g)', x, re.IGNORECASE) else "500ml")
     df = df.dropna(subset=['production_date'])
     
-    # [🚨 대표님 지시 정렬 고도화]: 주차와 카테고리 안에서 '동일 코드'를 빈틈없이 나란히 묶어주는 알고리즘 체결
+    # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -211,7 +211,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [🚨 오너 지시 핵심 패치: 생산 수량 추가 및 동일 코드 집결형 명품 엑셀 컴파일러]
+    # [🚨 오너 지시 핵심 패치: 특기사항 1, 2 칼럼이 추가된 엑셀 컴파일러]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -237,16 +237,16 @@ if final_file_target:
         thin_side = Side(border_style="thin", color="cbd5e1")
         border_all = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
         
-        # [수량 칼럼 전격 증설]
-        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "가격표 유무"]
+        # [🚨 특기사항 1, 2 칼럼 전격 끝단 신설 명세 채결]
+        headers = ["카테고리 그룹", "아이템 사진", "아이템 코드", "아이템 이름", "용량", "생산 수량", "PO 번호", "가격표 유무", "특기사항 1", "특기사항 2"]
         categories_order = ["skin", "body", "hair", "기타 카테고리"]
         current_row_idx = 1
         
         def write_week_block(ws, target_df, week_label_text, start_row):
             r_idx = start_row
             
-            # 주차별 랜드마크 마스터 배너
-            ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=8)
+            # 주차별 헤드라인 대형 바 마감
+            ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=10)
             title_cell = ws.cell(row=r_idx, column=1)
             title_cell.value = week_label_text
             title_cell.font = font_main_title
@@ -255,7 +255,7 @@ if final_file_target:
             ws.row_dimensions[r_idx].height = 35
             r_idx += 1
             
-            # 테이블 헤더 적재
+            # 테이블 컬럼 인덱스 매핑
             for col_num, h_text in enumerate(headers, 1):
                 h_cell = ws.cell(row=r_idx, column=col_num, value=h_text)
                 h_cell.font = font_header
@@ -265,7 +265,7 @@ if final_file_target:
             ws.row_dimensions[r_idx].height = 25
             r_idx += 1
             
-            # 카테고리 대정렬 매커니즘
+            # 카테고리 섹션 빌딩
             for cate in categories_order:
                 if cate != "기타 카테고리":
                     cate_df = target_df[target_df['category'].str.lower().str.contains(cate)]
@@ -273,46 +273,47 @@ if final_file_target:
                     cate_df = target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
                     
                 if not cate_df.empty:
-                    # 카테고리 구분 분리 레이아웃 주입
-                    ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=8)
+                    ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=10)
                     g_cell = ws.cell(row=r_idx, column=1)
                     g_cell.value = f"🌿 {cate.upper()} CARE LINEUP"
                     g_cell.font = font_group
                     g_cell.fill = fill_group
                     g_cell.alignment = align_left
-                    for c_num in range(1, 9):
+                    for c_num in range(1, 11):
                         ws.cell(row=r_idx, column=c_num).border = border_all
                     ws.row_dimensions[r_idx].height = 24
                     r_idx += 1
                     
-                    # 로우 주입 (이미 정렬 함수를 통과했으므로 동일 코드가 완벽히 누적 병합 배치됨)
                     for _, r in cate_df.iterrows():
+                        p_code = extract_pure_6_code(r['item_code'])
+                        memo_vals = saved_notes.get(p_code, ("", ""))
+                        
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
                         ws.cell(row=r_idx, column=5, value=r['volume'])
                         
-                        # [생산 수량 셀 서식 정밀 주입]
                         qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity'])
-                        qty_cell.number_format = '#,##0' # 숫자에 콤마 정렬 자동화
+                        qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
                         ws.cell(row=r_idx, column=7, value=r['po_number'])
                         ws.cell(row=r_idx, column=8, value="유" if str(r['price_tag']).strip() != "-" else "무")
                         
-                        # 셀 스타일 전체 동기화 마감
-                        for c_idx in range(1, 9):
+                        # [🚨 실시간 특기사항 데이터 베이스 연동 매핑 축]
+                        ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
+                        ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
+                        
+                        for c_idx in range(1, 11):
                             c_cell = ws.cell(row=r_idx, column=c_idx)
                             c_cell.font = font_data
                             c_cell.border = border_all
-                            if c_idx != 4 and c_idx != 6 and c_idx != 1:
+                            if c_idx != 4 and c_idx != 6 and c_idx != 1 and c_idx != 9 and c_idx != 10:
                                 c_cell.alignment = align_center
                             elif c_idx == 1:
                                 c_cell.alignment = align_center
                                 
-                        # 행높이 35 명품 규격 유지 조립
                         ws.row_dimensions[r_idx].height = 35
-                        p_code = extract_pure_6_code(r['item_code'])
                         img_path = f"{p_code}.png"
                         
                         if os.path.exists(img_path):
@@ -331,19 +332,20 @@ if final_file_target:
                         r_idx += 1
             return r_idx + 2
             
-        # 블록 가동 지시
         next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 라인업 계획 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
         write_week_block(ws, df_2weeks, f"🗓️ 2주 차 생산 라인업 계획 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
         
-        # 컬럼 간격 최적화 정렬
+        # 전체 칼럼 레이아웃 너비 밸런싱 최적화
         ws.column_dimensions['A'].width = 15
         ws.column_dimensions['B'].width = 12
         ws.column_dimensions['C'].width = 16
         ws.column_dimensions['D'].width = 38
         ws.column_dimensions['E'].width = 12
-        ws.column_dimensions['F'].width = 14 # 수량 컬럼 폭 마감
+        ws.column_dimensions['F'].width = 14
         ws.column_dimensions['G'].width = 16
         ws.column_dimensions['H'].width = 14
+        ws.column_dimensions['I'].width = 25 # 특기사항 1 폭 마감
+        ws.column_dimensions['J'].width = 25 # 특기사항 2 폭 마감
         
         wb.save(output)
         return output.getvalue()
@@ -453,20 +455,21 @@ if final_file_target:
                 st.error("❌ 데이터 제어 승인 암호가 일치하지 않습니다.")
 
     # ---------------------------------------------------------------------
-    # 5. 디자인 격자 프론트엔드 스타일 마감 구역
+    # 5. [🚨 오너 지시 핵심 반영]: 배경 검은색 완벽 제거 및 화면 바탕 연동 CSS
     # ---------------------------------------------------------------------
     st.markdown("""
         <style>
+            /* [핵심 수술 축]: 투명 박스 백그라운드로 전환하여 대시보드 바탕인 다크 네이비(#0f172a 계열)와 100% 카멜레온 동기화 */
             .owner-square-frame {
                 width: 100% !important;
                 aspect-ratio: 1 / 1 !important;
-                background-color: #1e293b !important;
-                border-radius: 12px !important;
+                background-color: transparent !important; /* 기존 검은색 박스 완벽 제거 및 배경색 투명화 마감 */
+                border-radius: 0px !important;
                 display: flex !important;
                 justify-content: center !important;
                 align-items: center !important;
                 overflow: hidden !important;
-                padding: 10px !important;
+                padding: 5px !important;
                 box-sizing: border-box !important;
                 margin-bottom: 8px !important;
             }
@@ -475,7 +478,7 @@ if final_file_target:
                 max-height: 100% !important;
                 width: auto !important;
                 height: auto !important;
-                object-fit: contain !important;
+                object-fit: contain !important; /* 원본 패키지 짤림 0% 전체 노출 스펙 유지 */
             }
             .owner-info-card-wrap {
                 background-color: #1e2530 !important; 
@@ -521,7 +524,6 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
-                            # [스크린 수량 표출 자동화 마감]
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -593,7 +595,7 @@ if final_file_target:
                             st.rerun()
                         st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
 
-    # 1주 차 및 2주 차 통합 그리드 빌드 가동 (이미 데이터 자체가 정합되어 동일 코드가 연달아 포진됨)
+    # 1주 차 및 2주 차 통합 그리드 빌드 가동
     render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", "w1")
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", "w2")
 
