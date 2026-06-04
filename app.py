@@ -167,14 +167,15 @@ if final_file_target:
             start_row_idx = idx + 1
             break
             
-    # [🚨 절대 열 1:1 직통 매핑 축 고정]
+    # [🚨 오너 명세 절대 고정 배선 프로토콜]: 
+    # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), V=21(날짜)
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
         row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 21:
+        if len(row_cells) < 22:  # V열 범위 안전 확인
             continue
             
-        p_date = pd.to_datetime(row_cells[20], errors='coerce') 
+        p_date = pd.to_datetime(row_cells[21], errors='coerce') # 🚨 [지시 반영] U열(20)이 아닌 V열(21)을 생산일자 타겟으로 전격 교체
         if pd.isna(p_date): 
             continue
             
@@ -200,26 +201,21 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # [🚨 주차 분리 아키텍처 원복 및 마감]
-    # 업로드 시 날짜 유실이나 누락이 있어도 정상 연산되도록 날짜 정합 기준 재정비
+    # [🚨 1주차, 2주차 달력 기반 전격 분리 시스템 완공]
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
     
+    # 이번주 일요일 23:59:59 마감 기준선
     target_next_monday = (today_dt + timedelta(days=next_monday_dist)).replace(hour=23, minute=59, second=59)
     second_monday_start = target_next_monday + timedelta(seconds=1)
+    # 다음주 일요일 23:59:59 마감 기준선
     target_second_monday = (second_monday_start + timedelta(days=6)).replace(hour=23, minute=59, second=59)
     
-    # 엑셀 시트 내 데이터의 연도와 월이 안 맞아 누락되는 경우를 방지하기 위해 날짜 필터 범위를 전면 오픈
-    df_1week = df[df['production_date'] <= target_next_monday].copy()
-    df_2weeks = df[df['production_date'] > target_next_monday].copy()
+    # V열 날짜가 오늘 시점 이후이면서 정해진 주차 스코프에 도달하는지 기계적 분류
+    df_1week = df[(df['production_date'] >= today_dt) & (df['production_date'] <= target_next_monday)].copy()
+    df_2weeks = df[(df['production_date'] >= second_monday_start) & (df['production_date'] <= target_second_monday)].copy()
     
-    # 만약 특정 주차에 데이터가 0개면 임의의 날짜 경계선에 구애받지 않도록 전체 데이터를 절반씩 균등 배분하여 무조건 두 주차가 다 뜨게 보완
-    if df_1week.empty or df_2weeks.empty:
-        mid_idx = len(df) // 2
-        df_1week = df.iloc[:mid_idx].copy()
-        df_2weeks = df.iloc[mid_idx:].copy()
-        
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
@@ -308,8 +304,8 @@ if final_file_target:
                         r_idx += 1
             return r_idx + 2
             
-        next_start_row = write_week_block(ws, df_w1, f"🗓️ 1주 차 생산 라인업 계획", current_row_idx)
-        write_week_block(ws, df_w2, f"🗓️ 2주 차 생산 라인업 계획", next_start_row)
+        next_start_row = write_week_block(ws, df_w1, f"🗓️ 1주 차 생산 라인업 계획 ({today_dt.strftime('%m/%d')} ~ {target_next_monday.strftime('%m/%d')})", current_row_idx)
+        write_week_block(ws, df_w2, f"🗓️ 2주 차 생산 라인업 계획 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", next_start_row)
         
         for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 25), ('K', 25)]:
             ws.column_dimensions[l].width = w
@@ -348,7 +344,7 @@ if final_file_target:
                     for idx, row in group_df.reset_index(drop=True).iterrows():
                         excel_code = row['item_code']
                         
-                        # 🚨 [핵심 수정 구역]: 로컬 썸네일 파일과 결합할 수 있도록 정규식 6자리 추출값을 다이렉트로 연동
+                        # 🚨 [사진 미표출 해제 정밀 코드]: 6자리 코드 규격을 명확하게 추출하여 배선을 연결합니다.
                         pure_excel_code = extract_pure_6_code(excel_code)
                         
                         with cols[idx % 6]:
@@ -413,14 +409,14 @@ if final_file_target:
                         key_m1 = f"input_m1_oth_{pure_excel_code}_{idx}"
                         user_m1 = st.text_input(label=f"T1_{pure_excel_code}_oth", value=memo_tuple[0], key=key_m1, placeholder="📋 특기사항 1 입력 후 Enter", label_visibility="collapsed")
                         key_m2 = f"input_m2_oth_{pure_excel_code}_{idx}"
-                        user_m2 = st.text_input(label=f"T2_{pure_excel_code}_oth", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
+                        user_m2 = st.text_input(label=f"T2_{pure_excel_code}_oth", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
                         if user_m1 != memo_tuple[0] or user_m2 != memo_tuple[1]:
                             save_production_note(pure_excel_code, user_m1, user_m2)
                             st.rerun()
                         st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
 
-    render_schedule_grid(df_1week, "📅 1주 차 생산 스케줄 대쉬보드", "w1")
-    render_schedule_grid(df_2weeks, "📅 2주 차 생산 스케줄 대쉬보드", "w2")
+    render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1")
+    render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
 
 else:
     st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
