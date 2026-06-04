@@ -19,7 +19,6 @@ MASTER_PASSWORD = "Fineformulation"
 ENTRY_SECURITY_CODE = "1234"      # [대표님 지정 핵심 보안 코드]
 SESSION_TIMEOUT_SEC = 300          # [대표님 지정: 열람 유효시간 5분 (300초)]
 
-# [오너 지시 정규식 핵심 축]: 띄어쓰기, 언더바 다 무시하고 오직 앞자리 순수 6자리 코드만 정밀 추출
 def extract_pure_6_code(text):
     if not text:
         return ""
@@ -27,7 +26,6 @@ def extract_pure_6_code(text):
     match = re.search(r'(\d{5}[A-Z])', cleaned)
     return match.group(1) if match else ""
 
-# [대표님 명세 1순위 조항]: 로컬 저장 파일을 1순위로 호출
 def get_saved_local_image_base64(pure_code):
     pure_code_clean = str(pure_code).strip().upper()
     target_path = f"{pure_code_clean}.png"
@@ -158,7 +156,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.write("📂 **새로운 스케줄 파일 업로드 / 교체**")
-    uploaded_file = st.file_uploader("여기에 엑셀 파일을 드래그 앤 드롭 하세요.", type=["xlsx", "xls"], label_visibility="collapsed")
+    uploaded_file = st.file_uploader("여기에 엑셀 파일을 드래그 앤 ド롭 하세요.", type=["xlsx", "xls"], label_visibility="collapsed")
     
     if uploaded_file and is_authenticated:
         with open(SAVED_EXCEL_PATH, "wb") as f:
@@ -174,49 +172,42 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
+    # 추적 장치를 전면 폐기하고 파일 전체를 순수 행렬 배열로 정직하게 로드합니다.
     raw_excel = pd.read_excel(final_file_target, header=None)
     
-    start_row_idx = 0
-    for idx, row in raw_excel.iterrows():
-        row_str_list = [str(cell) for cell in row.dropna().tolist()]
-        combined_row_text = "".join(row_str_list)
-        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
-            start_row_idx = idx + 1
-            break
-            
-    # 알파벳 열 매핑 고정: K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
+    # [🚨 오너 지시 절대 열 맵핑 규칙 수술]: 
+    # 어떠한 필터도 끼우지 않고 지정하신 알파벳 열 위치(K=10, L=11, M=12, Q=16, U=20)를 1:1로 추출합니다.
     clean_data_list = []
-    for idx in range(start_row_idx, len(raw_excel)):
+    for idx in range(len(raw_excel)):
         row_cells = raw_excel.iloc[idx]
+        
+        # 엑셀 시트 내의 유효 행인지 확인하기 위해 최소 칼럼 길이 및 U열(날짜)의 날짜 유효성만 검증합니다.
         if len(row_cells) < 21:
             continue
             
-        p_date_raw = row_cells[20] # U열
-        p_date = pd.to_datetime(p_date_raw, errors='coerce')
-        if pd.isna(p_date):
+        p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 (생산일자)
+        if pd.isna(p_date): # 정상적인 생산 날짜가 박혀있지 않은 제목열이나 빈 열은 완벽히 걸러집니다.
             continue
             
+        # 오직 지정 열 데이터만 강제 획득
         clean_data_list.append({
-            'item_code': str(row_cells[0]).strip(),     # A열
-            'category': str(row_cells[2]).strip(),      # C열
-            'po_number': str(row_cells[10]).strip(),    # K열
-            'bag_number': str(row_cells[11]).strip(),   # L열
-            'volume': str(row_cells[12]).strip(),       # M열
-            'product_name': str(row_cells[14]).strip(), # O열
-            'quantity': row_cells[16],                  # Q열 (아래에서 정수로 통합 변환 안전 패치)
+            'item_code': str(row_cells[0]).strip(),     # A열 (품목코드)
+            'category': str(row_cells[2]).strip(),      # C열 (카테고리)
+            'po_number': str(row_cells[10]).strip(),    # K열 (PO 번호)
+            'bag_number': str(row_cells[11]).strip(),   # L열 (Bag 번호)
+            'volume': str(row_cells[12]).strip(),       # M열 (아이템 용량)
+            'product_name': str(row_cells[14]).strip(), # O열 (품목명)
+            'quantity': pd.to_numeric(row_cells[16], errors='coerce') if not pd.isna(row_cells[16]) else 0, # Q열 (생산 수량)
             'production_date': p_date
         })
         
     df = pd.DataFrame(clean_data_list)
-    
-    # [🚨 오너 지시 핵심 보완 프로토콜]: 수량 Q열 변환 시 IntCastingNaNError 버그 완치 패치
-    # 비어있거나 누락된 셀(NaN), 문자 찌꺼기들을 원천적으로 숫자 0으로 밀어버린 뒤 정수로 변환합니다.
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
     for col in ['item_code', 'category', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
 
-    # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
+    # 주차와 카테고리 안에서 동일 코드 밀착 연동 정렬
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -236,7 +227,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 컴파일러]
+    # [📊 주차별 분리형 마스터 엑셀 컴파일러 - 가격 완전 배제 버전]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -311,14 +302,14 @@ if final_file_target:
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
-                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M열
+                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M열 타겟팅 고정
                         
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q열
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q열 타겟팅 고정
                         qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
-                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K열
-                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L열
+                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K열 타겟팅 고정
+                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L열 타겟팅 고정
                         
                         ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
@@ -541,6 +532,7 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
+                            # 가격표 유무 글자 찌꺼기를 완전 소멸 처리한 무결점 프론트엔드
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
