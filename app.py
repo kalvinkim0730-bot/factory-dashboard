@@ -19,13 +19,17 @@ MASTER_PASSWORD = "Fineformulation"
 ENTRY_SECURITY_CODE = "1234"      # [대표님 지정 핵심 보안 코드]
 SESSION_TIMEOUT_SEC = 300          # [대표님 지정: 열람 유효시간 5분 (300초)]
 
-# ---------------------------------------------------------------------
-# [⚡ 고속 연산 분리 센터 : 고정 데이터 영역 캐싱]
-# ---------------------------------------------------------------------
+# [오너 지시 정규식 핵심 축]: 띄어쓰기, 언더바 다 무시하고 오직 앞자리 순수 6자리 코드만 정밀 추출
+def extract_pure_6_code(text):
+    if not text:
+        return ""
+    cleaned = str(text).replace(" ", "").replace("_", "").replace("\r", "").replace("\n", "").replace("\t", "").strip().upper()
+    match = re.search(r'(\d{5}[A-Z])', cleaned)
+    return match.group(1) if match else ""
 
-# 1. 원본 이미지 base64 변환 연산 캐싱 (동일 이미지 무한 인코딩 방지)
+# 이미지 인코딩만 가볍게 메모리 유지
 @st.cache_resource
-def get_saved_local_image_base64_cached(pure_code):
+def get_saved_local_image_base64(pure_code):
     pure_code_clean = str(pure_code).strip().upper()
     target_path = f"{pure_code_clean}.png"
     if os.path.exists(target_path):
@@ -36,58 +40,6 @@ def get_saved_local_image_base64_cached(pure_code):
         except Exception:
             return None
     return None
-
-# 2. 대용량 마스터 엑셀 로드 및 1:1 절대 배선 정밀 연산 캐싱
-# 파일 수정 시간(mtime)을 감시하여 파일이 교체될 때만 딱 1번 무겁게 읽고, 평소엔 메모리에서 즉시 호출
-@st.cache_data
-def load_and_parse_excel_cached(file_path, file_mtime):
-    raw_df = pd.read_excel(file_path, header=None)
-    if len(raw_df) > 0 and str(raw_df.iloc[0, 0]).strip() in ['일정', '코드', '카테고리', 'Date', 'Item']:
-        raw_df = raw_df.iloc[1:]
-        
-    clean_data_list = []
-    for idx in range(len(raw_df)):
-        row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 21:  # U열 범위 안전 확인
-            continue
-            
-        p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
-        if pd.isna(p_date):
-            continue
-            
-        # [🚨 대표님 지정 알파벳 열 절대 인덱스 1:1 무결점 매핑]
-        # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량)
-        clean_data_list.append({
-            'item_code': str(row_cells[0]).strip(),     
-            'category': str(row_cells[2]).strip(),      
-            'price_tag': str(row_cells[5]).strip(),     
-            'po_number': str(row_cells[10]).strip(),    
-            'bag_number': str(row_cells[11]).strip(),   
-            'volume': str(row_cells[12]).strip(),       
-            'product_name': str(row_cells[14]).strip(), 
-            'quantity': row_cells[16],                  
-            'production_date': p_date
-        })
-        
-    parsed_df = pd.DataFrame(clean_data_list)
-    parsed_df['quantity'] = pd.to_numeric(parsed_df['quantity'], errors='coerce').fillna(0).astype(int)
-    
-    # 공백 데이터 '-' 치환 정화 처리
-    for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
-        parsed_df[col] = parsed_df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
-        parsed_df[col] = parsed_df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
-        
-    # 동일 코드 밀착 정렬 알고리즘
-    parsed_df = parsed_df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
-    return parsed_df
-
-# [오너 지시 정규식 핵심 축]
-def extract_pure_6_code(text):
-    if not text:
-        return ""
-    cleaned = str(text).replace(" ", "").replace("_", "").replace("\r", "").replace("\n", "").replace("\t", "").strip().upper()
-    match = re.search(r'(\d{5}[A-Z])', cleaned)
-    return match.group(1) if match else ""
 
 # ---------------------------------------------------------------------
 # [📝 특기사항 1, 2 멀티 메모리 영구 저장 엔진]
@@ -124,7 +76,9 @@ def save_production_note(pure_code, memo1, memo2):
 # =========================================================================
 st.set_page_config(layout="wide", page_title="생산 스케줄 마스터 데이터 경영 대시보드")
 
+# ---------------------------------------------------------------------
 # [🚨 실시간 사용 감지 5분 연장 엔진]
+# ---------------------------------------------------------------------
 if "app_unlocked" not in st.session_state:
     st.session_state["app_unlocked"] = False
 if "unlock_time" not in st.session_state:
@@ -141,7 +95,9 @@ if st.session_state["app_unlocked"] and st.session_state["unlock_time"] is not N
     else:
         st.session_state["unlock_time"] = time.time()
 
+# ---------------------------------------------------------------------
 # [🔒 게이트웨이 정문 차단막 인터페이스]
+# ---------------------------------------------------------------------
 if not st.session_state["app_unlocked"]:
     st.markdown("""
         <style>
@@ -150,6 +106,7 @@ if not st.session_state["app_unlocked"]:
         </style>
     """, unsafe_allow_html=True)
     st.markdown('<div class="security-gate"><h1 style="color: #38bdf8; font-size: 28px; font-weight: bold; margin-bottom: 10px;">🔒 FINE FORMULATION</h1><p style="color: #94a3b8; font-size: 15px; margin-bottom: 25px;">본 시스템은 기업 기밀 자산 보호 구역입니다.<br>열람 유효시간은 5분이며, <b>사용 중일 경우 실시간으로 자동 연장</b>됩니다.</p></div>', unsafe_allow_html=True)
+    
     cols = st.columns([1, 2, 1])
     with cols[1]:
         input_gate_code = st.text_input("🔑 보안 코드 입력", type="password", key="gate_code_input")
@@ -161,6 +118,9 @@ if not st.session_state["app_unlocked"]:
             st.rerun()
     st.stop()
 
+# ---------------------------------------------------------------------
+# [🔓 마스터 대시보드 코어]
+# ---------------------------------------------------------------------
 has_saved_file = os.path.exists(SAVED_EXCEL_PATH)
 final_file_target = SAVED_EXCEL_PATH if has_saved_file else None
 
@@ -186,13 +146,53 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # 🚨 파일 변경 시간을 체크하여 고정 연산 최적화 유도 (캐싱 연동 키)
-    file_mtime = os.path.getmtime(final_file_target)
+    # 🚨 [버그 원천 차단]: 데이터를 꼬이게 만들던 cache_data 캐싱 장치와 usecols 압축 명령어를 완전히 흔적도 없이 파괴했습니다.
+    raw_df = pd.read_excel(final_file_target, header=None)
     
-    # 고속 분리 연산 코어 작동 (엑셀 크기에 무관하게 즉각 응답)
-    df = load_and_parse_excel_cached(final_file_target, file_mtime)
+    # 문자가 들어간 실제 데이터 타이틀 행의 위치를 기계적으로 추적
+    start_row_idx = 0
+    for idx, row in raw_df.iterrows():
+        row_str_list = [str(cell) for cell in row.dropna().tolist()]
+        combined_row_text = "".join(row_str_list)
+        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
+            start_row_idx = idx + 1
+            break
+            
+    # [🚨 대표님 지정 알파벳 고유 열 주소 1:1 다이렉트 직통 배선]
+    # A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
+    clean_data_list = []
+    for idx in range(start_row_idx, len(raw_df)):
+        row_cells = raw_df.iloc[idx]
+        if len(row_cells) < 21:
+            continue
+            
+        p_date = pd.to_datetime(row_cells[20], errors='coerce') # U열 대조
+        if pd.isna(p_date):
+            continue
+            
+        clean_data_list.append({
+            'item_code': str(row_cells[0]).strip(),     # A열
+            'category': str(row_cells[2]).strip(),      # C열
+            'price_tag': str(row_cells[5]).strip(),     # F열
+            'po_number': str(row_cells[10]).strip(),    # K열
+            'bag_number': str(row_cells[11]).strip(),   # L열
+            'volume': str(row_cells[12]).strip(),       # M열
+            'product_name': str(row_cells[14]).strip(), # O열
+            'quantity': row_cells[16],                  # Q열
+            'production_date': p_date
+        })
+        
+    df = pd.DataFrame(clean_data_list)
+    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     
-    # 실시간 시간 분류 처리 (가벼운 실시간 필터만 유지)
+    # 🚨 [공백 데이터 철저 정화]: 비어있는 데이터는 무조건 대표님 지시대로 '-' 처리
+    for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
+        df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
+        df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
+    
+    # 주차와 카테고리 안에서 동일 코드 밀착 정렬 알고리즘
+    df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
+    
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
@@ -302,7 +302,6 @@ if final_file_target:
 
     with st.sidebar:
         st.markdown("---")
-        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
         st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
@@ -334,10 +333,10 @@ if final_file_target:
                         pure_excel_code = extract_pure_6_code(excel_code)
                         
                         with cols[idx % 6]:
-                            # 🚨 캐싱 엔진에서 초고속으로 이미지 리턴
-                            local_base64_data = get_saved_local_image_base64_cached(pure_excel_code)
+                            local_base64_data = get_saved_local_image_base64(pure_excel_code)
                             st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
                             
+                            # [🚨 대표님 오더 1순위 전격 반영]: 가격표 유무, 용량 개별 줄바꿈 및 1:1 완벽 고정 출력
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -365,42 +364,6 @@ if final_file_target:
                                 st.rerun()
                                 
                             st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
-            
-            other_df = target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
-            if not other_df.empty:
-                st.markdown('<div style="font-size:20px; font-weight:bold; color:#94a3b8; padding:6px 12px; background-color:#0f172a; border-left:5px solid #94a3b8; border-radius:4px; margin-top:25px; margin-bottom:15px;">📦 기타 카테고리 Lineup</div>', unsafe_allow_html=True)
-                cols = st.columns(6)
-                for idx, row in other_df.reset_index(drop=True).iterrows():
-                    excel_code = row['item_code']
-                    pure_excel_code = extract_pure_6_code(excel_code)
-                    with cols[idx % 6]:
-                        local_base64_data = get_saved_local_image_base64_cached(pure_excel_code)
-                        st.html(f'<div class="owner-square-frame"><img src="{local_base64_data if local_base64_data else ""}"></div>')
-                        
-                        st.html(f"""
-                            <div class="owner-info-card-wrap">
-                                <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
-                                <div class="owner-text-row" style="font-size:14px !important; color:#a0aec0 !important; font-weight:500 !important; min-height:40px !important; margin-bottom:14px !important; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{row['product_name']}</div>
-                                <div style="border-bottom:1px solid #2d3748 !important; margin-bottom:12px !important;"></div>
-                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
-                                <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
-                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                                <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
-                                <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
-                                    <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
-                                    <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
-                                </div>
-                            </div>
-                        """)
-                        memo_tuple = saved_notes.get(pure_excel_code, ("", ""))
-                        key_m1 = f"input_m1_oth_{pure_excel_code}_{idx}"
-                        user_m1 = st.text_input(label=f"T1_{pure_excel_code}_oth", value=memo_tuple[0], key=key_m1, placeholder="📋 특기사항 1 입력 후 Enter", label_visibility="collapsed")
-                        key_m2 = f"input_m2_oth_{pure_excel_code}_{idx}"
-                        user_m2 = st.text_input(label=f"T2_{pure_excel_code}_oth", value=memo_tuple[1], key=key_m2, placeholder="📦 특기사항 2 입력 후 Enter", label_visibility="collapsed")
-                        if user_m1 != memo_tuple[0] or user_m2 != memo_tuple[1]:
-                            save_production_note(pure_excel_code, user_m1, user_m2)
-                            st.rerun()
-                        st.markdown('<div style="margin-bottom:30px;"></div>', unsafe_allow_html=True)
 
     render_schedule_grid(df_1week, "📅 1주 차 생산 스케줄 대쉬보드", "w1")
     render_schedule_grid(df_2weeks, "📅 2주 차 생산 스케줄 대쉬보드", "w2")
