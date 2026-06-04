@@ -315,7 +315,6 @@ if final_file_target:
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
         st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
-        # [🔄 현재 스케줄 이미지 서버에 저장] 동기화 구역 완벽 유지
         st.markdown("---")
         st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업 센터</div>', unsafe_allow_html=True)
         if st.button("🔄 현재 스케줄 이미지 서버에 저장", use_container_width=True):
@@ -366,7 +365,7 @@ if final_file_target:
             else:
                 st.error("❌ 승인 암호가 올바르지 않습니다.")
 
-    # 🚨 [비주얼 극대화 마감 CSS]: 인풋 박스 상하 불필요 공백(Padding, Margin) 최소화 정밀 가공 구역
+    # 🚨 [초명품 초밀착 마감 CSS]: 위젯 블록 간 격차 및 마진을 0px 수준으로 격파
     st.markdown("""
         <style>
             .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
@@ -374,10 +373,14 @@ if final_file_target:
             .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
             .owner-text-row { margin: 0px !important; padding: 0px !important; text-align: left !important; line-height: 1.4 !important; }
             
-            /* 5대 스마트 인풋 컴팩트 압축 바인딩 공정 */
-            div[data-testid="stTextInput"] { margin-top: 0px !important; margin-bottom: 2px !important; padding: 0px !important; }
-            div[data-testid="stTextInput"] label { font-size: 12px !important; color: #94a3b8 !important; font-weight: bold !important; margin-bottom: 1px !important; padding-top: 0px !important; }
-            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 32px !important; padding: 4px 8px !important; }
+            /* 🚨 [초밀착 특화 엔지니어링 조항] : 스트림릿 고유 세로 마진 강제 파괴 */
+            div[data-testid="stVerticalBlock"] > div { margin-bottom: 0px !important; padding-bottom: 0px !important; }
+            div[data-testid="stTextInput"] { margin-top: 0px !important; margin-bottom: 0px !important; padding: 0px !important; }
+            div[data-testid="stTextInput"] label { font-size: 13px !important; color: #94a3b8 !important; font-weight: bold !important; margin-bottom: 1px !important; padding-top: 2px !important; }
+            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 28px !important; padding: 2px 8px !important; }
+            
+            /* 엘리먼트 하단 잔여 여백 완전 박살 */
+            .element-container { margin-bottom: 0px !important; padding-bottom: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -408,7 +411,7 @@ if final_file_target:
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">가격표 유무: <span style="color:#63b3ed !important; font-weight:bold !important;">{row['price_tag']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#ffffff !important; margin-bottom:3px !important;">용량: <span style="color:#ffffff !important; font-weight:bold !important;">{row['volume']}</span></div>
                                     <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">PO#: <span style="color:#ecc94b !important; font-weight:bold !important;">{row['po_number']}</span></div>
-                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:16px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
+                                    <div class="owner-text-row" style="font-size:14px !important; color:#718096 !important; margin-bottom:3px !important;">Bag#: <span style="color:#e53e3e !important; font-weight:bold !important;">{row['bag_number']}</span></div>
                                     <div style="background-color:#111622 !important; border-radius:8px !important; padding:8px 12px !important; display:flex !important; justify-content:space-between !important; align-items:center !important;">
                                         <span class="owner-text-row" style="font-size:16px !important; color:#48bb78 !important; font-weight:bold !important;">📦 {row['quantity']:,}개</span>
                                         <span class="owner-text-row" style="font-size:13px !important; color:#a0aec0 !important; font-weight:500 !important;">📅 {row['production_date'].strftime('%m-%d')}</span>
@@ -416,7 +419,7 @@ if final_file_target:
                                 </div>
                             """)
                             
-                            # 🚨 [대표님 핵심 지시 조항]: 기존 특기사항 2칸 폐기 ➔ 스마트 팩토리 5대 입력 컴팩트 연동
+                            # 5대 인풋 바인딩
                             memo_tuple = saved_notes.get(pure_excel_code, ("", "", "", "", ""))
                             
                             u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
@@ -425,7 +428,6 @@ if final_file_target:
                             u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3], key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
                             u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4], key=f"inp_s_{section_prefix}_{pure_excel_code}_{idx}")
                             
-                            # 실시간 감지 변경 저장 처리
                             if (u_c_code != memo_tuple[0] or u_pack_qty != memo_tuple[1] or 
                                 u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
                                 save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty)
