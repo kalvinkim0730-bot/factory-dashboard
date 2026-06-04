@@ -174,28 +174,29 @@ with st.sidebar:
         st.rerun()
 
 if final_file_target:
-    # 헤더 인식이 꼬여 밀리는 버그를 원천 봉쇄하기 위해 헤더 자동 지정을 해제(header=None)합니다.
+    # 꼬임 방지를 위해 헤더 자동 지정 해제
     raw_excel = pd.read_excel(final_file_target, header=None)
     
-    # "일정, 코드, 카테고리" 등 문자가 들어간 진짜 첫 행(제목 줄)의 위치를 역추적해 데이터 시작점을 잡습니다.
+    # [🚨 타입 에러 완치 마감]: 모든 데이터를 무조건 스트링(str) 배열로 안전 필터링하여 제목 열을 추적합니다.
     start_row_idx = 0
     for idx, row in raw_excel.iterrows():
-        row_str = row.astype(str).tolist()
-        if any(keyword in "".join(row_str) for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
+        row_str_list = [str(cell) for cell in row.dropna().tolist()]
+        combined_row_text = "".join(row_str_list)
+        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
             start_row_idx = idx + 1
             break
             
-    # [🚨 오너 지시 칼럼 대조 하드코딩 수술 최종 완공 구역]:
-    # 알파벳 절대 열 위치 명세표: A=0(코드), C=2(카테고리), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(생산일자)
+    # [🚨 오너 지시 칼럼 대조 정밀 배선]:
+    # 가격 전면 제외 / K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_excel)):
         row_cells = raw_excel.iloc[idx]
-        if len(row_cells) < 21:  # U열까지 도달하지 못하는 불완전한 로우 스킵
+        if len(row_cells) < 21:
             continue
             
         p_date_raw = row_cells[20] # U열
         p_date = pd.to_datetime(p_date_raw, errors='coerce')
-        if pd.isna(p_date): # 날짜가 없는 빈 행 탈거
+        if pd.isna(p_date):
             continue
             
         clean_data_list.append({
@@ -212,7 +213,6 @@ if final_file_target:
     df = pd.DataFrame(clean_data_list)
     df['quantity'] = df['quantity'].astype(int)
     
-    # 텍스트 마찰 복구 및 특수nan 필터 처리
     for col in ['item_code', 'category', 'po_number', 'bag_number', 'volume', 'product_name']:
         df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', ''], '-')
 
@@ -236,7 +236,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 컴파일러 - 가격 완전 배제 버전]
+    # [📊 주차별 분리형 마스터 엑셀 컴파일러 - 가격 제외]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -268,7 +268,6 @@ if final_file_target:
         def write_week_block(ws, target_df, week_label_text, start_row):
             r_idx = start_row
             
-            # 주차 배너 마감
             ws.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=10)
             title_cell = ws.cell(row=r_idx, column=1)
             title_cell.value = week_label_text
@@ -312,14 +311,14 @@ if final_file_target:
                         ws.cell(row=r_idx, column=1, value=r['category'])
                         ws.cell(row=r_idx, column=3, value=r['item_code'])
                         ws.cell(row=r_idx, column=4, value=r['product_name'])
-                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M칼럼 타겟팅
+                        ws.cell(row=r_idx, column=5, value=r['volume'])     # M열 타겟팅
                         
-                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q칼럼 타겟팅
+                        qty_cell = ws.cell(row=r_idx, column=6, value=r['quantity']) # Q열 타겟팅
                         qty_cell.number_format = '#,##0'
                         qty_cell.alignment = align_right
                         
-                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K칼럼 타겟팅
-                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L칼럼 타겟팅
+                        ws.cell(row=r_idx, column=7, value=r['po_number'])  # K열 타겟팅
+                        ws.cell(row=r_idx, column=8, value=r['bag_number']) # L열 타겟팅
                         
                         ws.cell(row=r_idx, column=9, value=memo_vals[0]).alignment = align_left
                         ws.cell(row=r_idx, column=10, value=memo_vals[1]).alignment = align_left
@@ -408,7 +407,7 @@ if final_file_target:
                     
                     secured_headers = {
                         "Authorization": f'OAuth oauth_consumer_key="{TRELLO_API_KEY}", oauth_token="{TRELLO_TOKEN}"',
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                     }
                     
                     status_placeholder.info(f"🛰️ 오리지널 썸네일 수집 허브 연동 시작...")
@@ -542,7 +541,7 @@ if final_file_target:
                             else:
                                 st.html(f'<div class="owner-square-frame"><div style="color:#f87171; font-size:13px; font-weight:bold; text-align:center; padding:10px;">{excel_code}<br>[백업 필요]</div></div>')
                             
-                            # [🚨 대표님 핵심 수정 반영]: 가격 전면 제외 스크린 표출 사양 고정
+                            # [🚨 명세 확정 마감 구역]: 스크린 전체 레이아웃 가격표 완전 증발 사양 고정 완료
                             st.html(f"""
                                 <div class="owner-info-card-wrap">
                                     <div class="owner-text-row" style="font-size:30px !important; font-weight:900 !important; color:#ffffff !important; margin-bottom:6px !important; letter-spacing:0.5px !important;">{excel_code}</div>
@@ -617,5 +616,4 @@ if final_file_target:
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 ({second_monday_start.strftime('%m/%d')} ~ {target_second_monday.strftime('%m/%d')})", "w2")
 
 else:
-    # 마스터 데이터 미감지 시 빈 레이아웃 안내 고정 문구 출력
     st.info("💡 스케줄 마스터 엑셀 파일 로드 대기중")
