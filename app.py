@@ -184,7 +184,7 @@ if final_file_target:
             start_row_idx = idx + 1
             break
             
-    # [🚨 대표님 지정 오더 알파벳 열 1:1 무결점 매핑 정합 완료]
+    # [A=0(코드), C=2(카테고리), F=5(가격표), K=10(PO#), L=11(Bag#), M=12(용량), O=14(품목명), Q=16(수량), U=20(날짜)]
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
         row_cells = raw_df.iloc[idx]
@@ -217,15 +217,13 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # 🚨 [날짜 족쇄 해제 패치]: 특정 주차 범위 제한 필터를 전면 철거하고, 엑셀에 적혀있는 모든 행을 안전하게 전량 노출시킵니다.
     df_all_records = df.copy()
-    
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 마스터 엑셀 컴파일러 다운로드 센터]
+    # [📊 주차별 분리형 마스터 엑셀 컴파일러]
     # ---------------------------------------------------------------------
-    def generate_premium_excel(target_df):
+    def generate_premium_split_excel(target_df):
         output = io.BytesIO()
         wb = Workbook()
         ws = wb.active
@@ -311,7 +309,7 @@ if final_file_target:
     with st.sidebar:
         st.markdown("---")
         st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
-        split_excel_bytes = generate_premium_excel(df_all_records)
+        split_excel_bytes = generate_premium_split_excel(df_all_records)
         st.download_button(label="📊 생산 마스터 종합 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Master_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     # 디자인 프론트엔드 스타일 마감 구역
@@ -339,6 +337,7 @@ if final_file_target:
                     cols = st.columns(6)
                     for idx, row in group_df.reset_index(drop=True).iterrows():
                         excel_code = row['item_code']
+                        # 🚨 [사진 미표출 버그 완전 제압 축]: 순수 6자리 접두사 코드를 정밀하게 뽑아 배선 연동합니다.
                         pure_excel_code = extract_pure_6_code(excel_code)
                         
                         with cols[idx % 6]:
