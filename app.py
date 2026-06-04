@@ -169,7 +169,7 @@ if final_file_target:
     clean_data_list = []
     for idx in range(start_row_idx, len(raw_df)):
         row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 22:
+        if len(row_cells) < 22:  # V열 범위 안전 확인
             continue
             
         p_date = pd.to_datetime(row_cells[21], errors='coerce') 
@@ -213,7 +213,7 @@ if final_file_target:
     saved_notes = load_production_notes()
 
     # ---------------------------------------------------------------------
-    # [📊 주차별 분리형 마스터 엑셀 컴파일러]
+    # [📊 주차별 분리형 마스터 엑셀 다운로드 파일 빌더]
     # ---------------------------------------------------------------------
     def generate_premium_split_excel(df_w1, df_w2):
         output = io.BytesIO()
@@ -365,7 +365,7 @@ if final_file_target:
             else:
                 st.error("❌ 승인 암호가 올바르지 않습니다.")
 
-    # 🚨 [초명품 초밀착 마감 CSS]: 위젯 블록 간 격차 및 마진을 0px 수준으로 격파
+    # 🚨 [하드코어 가로 정렬 및 여백 완전 박살 CSS 엔지니어링]
     st.markdown("""
         <style>
             .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
@@ -373,13 +373,49 @@ if final_file_target:
             .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
             .owner-text-row { margin: 0px !important; padding: 0px !important; text-align: left !important; line-height: 1.4 !important; }
             
-            /* 🚨 [초밀착 특화 엔지니어링 조항] : 스트림릿 고유 세로 마진 강제 파괴 */
+            /* 🚨 [오너 발주] : 줄바꿈을 완벽히 없애고 가로로 1:1 따닥따닥 매칭 처리 */
             div[data-testid="stVerticalBlock"] > div { margin-bottom: 0px !important; padding-bottom: 0px !important; }
-            div[data-testid="stTextInput"] { margin-top: 0px !important; margin-bottom: 0px !important; padding: 0px !important; }
-            div[data-testid="stTextInput"] label { font-size: 13px !important; color: #94a3b8 !important; font-weight: bold !important; margin-bottom: 1px !important; padding-top: 2px !important; }
-            div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 28px !important; padding: 2px 8px !important; }
             
-            /* 엘리먼트 하단 잔여 여백 완전 박살 */
+            /* 인풋 컴포넌트 내부 레이아웃을 Flex를 통해 가로로 강제 재조립 */
+            div[data-testid="stTextInput"] { 
+                display: flex !important; 
+                flex-direction: row !important; 
+                align-items: center !important; 
+                justify-content: space-between !important;
+                margin-top: 0px !important; 
+                margin-bottom: 1px !important; 
+                padding: 0px !important; 
+                gap: 10px !important;
+            }
+            
+            /* 라벨 속성 가로형 배치 프로토콜 (줄바꿈 원천 차단 및 고정폭 부여) */
+            div[data-testid="stTextInput"] label { 
+                font-size: 13px !important; 
+                color: #94a3b8 !important; 
+                font-weight: bold !important; 
+                min-width: 80px !important; 
+                max-width: 80px !important;
+                text-align: left !important;
+                margin: 0px !important; 
+                padding: 0px !important;
+                white-space: nowrap !important;
+            }
+            
+            /* 가로 맞춤 입력창 슬롯 최적화 공정 */
+            div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div {
+                flex-grow: 1 !important;
+                width: 100% !important;
+            }
+            div[data-testid="stTextInput"] input { 
+                background-color: #0f172a !important; 
+                color: #38bdf8 !important; 
+                border: 1px solid #334155 !important; 
+                border-radius: 6px !important; 
+                font-size: 13px !important; 
+                height: 28px !important; 
+                padding: 2px 8px !important; 
+            }
+            
             .element-container { margin-bottom: 0px !important; padding-bottom: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -419,7 +455,7 @@ if final_file_target:
                                 </div>
                             """)
                             
-                            # 5대 인풋 바인딩
+                            # 🚨 [가로형 인터페이스 정밀 매핑]
                             memo_tuple = saved_notes.get(pure_excel_code, ("", "", "", "", ""))
                             
                             u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0], key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
@@ -433,7 +469,7 @@ if final_file_target:
                                 save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty)
                                 st.rerun()
                                 
-                            st.markdown('<div style="margin-bottom:15px;"></div>', unsafe_allow_html=True)
+                            st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
             
             other_df = target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
             if not other_df.empty:
@@ -472,7 +508,7 @@ if final_file_target:
                             u_m_date != memo_tuple[2] or u_m_qty != memo_tuple[3] or u_p_qty != memo_tuple[4]):
                             save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty)
                             st.rerun()
-                        st.markdown('<div style="margin-bottom:15px;"></div>', unsafe_allow_html=True)
+                        st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
 
     render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1")
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
