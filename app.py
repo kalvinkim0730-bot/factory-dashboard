@@ -41,47 +41,6 @@ def get_saved_local_image_base64(pure_code):
     return None
 
 # ---------------------------------------------------------------------
-# [🚨 백엔드 엔지니어링 개조]: 엑셀 파싱 연산 메모리 캐싱 장치 주입 (속도 10배 향상)
-# ---------------------------------------------------------------------
-@st.cache_data(ttl=60)
-def load_and_clean_excel(file_path):
-    raw_df = pd.read_excel(file_path, header=None)
-    start_row_idx = 0
-    for idx, row in raw_df.iterrows():
-        row_str_list = [str(cell) for cell in row.dropna().tolist()]
-        combined_row_text = "".join(row_str_list)
-        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
-            start_row_idx = idx + 1
-            break
-            
-    clean_data_list = []
-    for idx in range(start_row_idx, len(raw_df)):
-        row_cells = raw_df.iloc[idx]
-        if len(row_cells) < 22:
-            continue
-        p_date = pd.to_datetime(row_cells[21], errors='coerce') 
-        if pd.isna(p_date): 
-            continue
-        clean_data_list.append({
-            'item_code': str(row_cells[0]).strip(),     
-            'category': str(row_cells[2]).strip(),      
-            'price_tag': str(row_cells[5]).strip(),     
-            'po_number': str(row_cells[10]).strip(),    
-            'bag_number': str(row_cells[11]).strip(),   
-            'volume': str(row_cells[12]).strip(),       
-            'product_name': str(row_cells[14]).strip(), 
-            'quantity': row_cells[16],                  
-            'production_date': p_date
-        })
-    df = pd.DataFrame(clean_data_list)
-    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
-    for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
-        df[col] = df[col].fillna('-').astype(str).str.strip()
-        df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
-        df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
-    return df
-
-# ---------------------------------------------------------------------
 # [📝 5대 입력 데이터 + 완료 상태 비트 영구 저장 엔진]
 # ---------------------------------------------------------------------
 def load_production_notes():
@@ -104,21 +63,14 @@ def load_production_notes():
             pass
     return notes
 
-def save_production_note(pure_code, c_code, pack_qty, m_date, m_qty, p_qty, is_done="N"):
-    notes = load_production_notes()
-    notes[pure_code] = (c_code.strip(), pack_qty.strip(), m_date.strip(), m_qty.strip(), p_qty.strip(), is_done.strip())
-    try:
-        with open(NOTES_DB_PATH, "w", encoding="utf-8") as f:
-            for code, values in notes.items():
-                if any(values):
-                    f.write(f"{code}::{values[0]}::{values[1]}::{values[2]}::{values[3]}::{values[4]}::{values[5]}\n")
-    except Exception:
-        pass
-
 # =========================================================================
 # 2. 스트림릿 웹 대시보드 UI 레이아웃 구성
 # =========================================================================
 st.set_page_config(layout="wide", page_title="생산 스케줄 마스터 데이터 경영 대시보드")
+
+# 초기 임시 세션 딕셔너리 구축 (일괄 저장을 위해 메모리에 임시 홀딩하는 버퍼)
+if "input_buffer" not in st.session_state:
+    st.session_state["input_buffer"] = {}
 
 # ---------------------------------------------------------------------
 # [🚨 실시간 사용 감지 5분 연장 엔진]
@@ -173,10 +125,54 @@ if not st.session_state["app_unlocked"]:
     st.stop()
 
 # ---------------------------------------------------------------------
+# [🔓 마스터 엑셀 파싱 연산 캐싱]
+# ---------------------------------------------------------------------
+@st.cache_data(ttl=60)
+def load_and_clean_excel(file_path):
+    raw_df = pd.read_excel(file_path, header=None)
+    start_row_idx = 0
+    for idx, row in raw_df.iterrows():
+        row_str_list = [str(cell) for cell in row.dropna().tolist()]
+        combined_row_text = "".join(row_str_list)
+        if any(keyword in combined_row_text for keyword in ['일정', '코드', '카테고리', 'Date', 'Item']):
+            start_row_idx = idx + 1
+            break
+            
+    clean_data_list = []
+    for idx in range(start_row_idx, len(raw_df)):
+        row_cells = raw_df.iloc[idx]
+        if len(row_cells) < 22:
+            continue
+        p_date = pd.to_datetime(row_cells[21], errors='coerce') 
+        if pd.isna(p_date): 
+            continue
+        clean_data_list.append({
+            'item_code': str(row_cells[0]).strip(),     
+            'category': str(row_cells[2]).strip(),      
+            'price_tag': str(row_cells[5]).strip(),     
+            'po_number': str(row_cells[10]).strip(),    
+            'bag_number': str(row_cells[11]).strip(),   
+            'volume': str(row_cells[12]).strip(),       
+            'product_name': str(row_cells[14]).strip(), 
+            'quantity': row_cells[16],                  
+            'production_date': p_date
+        })
+    df = pd.DataFrame(clean_data_list)
+    df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
+    for col in ['item_code', 'category', 'price_tag', 'po_number', 'bag_number', 'volume', 'product_name']:
+        df[col] = df[col].fillna('-').astype(str).str.strip()
+        df[col] = df[col].replace(['nan', 'NAN', 'NaN', 'None', '', ' ', '-'], '-')
+        df[col] = df[col].apply(lambda x: '-' if str(x).strip() not in ['Y', 'N'] and col == 'price_tag' else x)
+    return df
+
+# ---------------------------------------------------------------------
 # [🔓 오픈 마스터 대시보드 코어]
 # ---------------------------------------------------------------------
 has_saved_file = os.path.exists(SAVED_EXCEL_PATH)
 final_file_target = SAVED_EXCEL_PATH if has_saved_file else None
+
+# 실시간 영구 파일 로드
+saved_notes = load_production_notes()
 
 with st.sidebar:
     st.markdown(f'<div style="color:#ffffff; font-size:15px; font-weight:bold; background-color:#0284c7; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">🟢 시스템 가동 중 (활동 중 자동 연장)</div>', unsafe_allow_html=True)
@@ -185,6 +181,36 @@ with st.sidebar:
     input_password = st.text_input("🔓 데이터 제어 승인 암호", type="password", key="auth_pwd_input")
     is_authenticated = (input_password == MASTER_PASSWORD)
 
+    # 🚨 [대표님 핵심 지시 조항]: 사이드바 마스터 제어센터 하단에 일괄 업로드 통합 버튼 전격 배치
+    if has_saved_file:
+        st.markdown("---")
+        st.markdown('<div style="font-size:15px; font-weight:bold; color:#10b981; margin-bottom:5px;">💾 통합 실무 데이터 관리</div>', unsafe_allow_html=True)
+        
+        # 버튼 스타일 마감
+        st.markdown("""<style>div.owner-sidebar-save button { background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: white !important; font-weight: bold !important; font-size: 14px !important; border: 1px solid #34d399 !important; height: 42px !important; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4) !important; }</style>""", unsafe_allow_html=True)
+        st.markdown('<div class="owner-sidebar-save">', unsafe_allow_html=True)
+        if st.button("💾 전체 정보 서버 업로드 (일괄 저장)", use_container_width=True):
+            if st.session_state["input_buffer"]:
+                # 메모리 버퍼에 쌓여있던 수정 정보들을 실제 물리 텍스트 파일로 일제히 영구 병합
+                current_notes = load_production_notes()
+                for code_key, val_tuple in st.session_state["input_buffer"].items():
+                    current_notes[code_key] = val_tuple
+                
+                try:
+                    with open(NOTES_DB_PATH, "w", encoding="utf-8") as f:
+                        for code, values in current_notes.items():
+                            if any(values):
+                                f.write(f"{code}::{values[0]}::{values[1]}::{values[2]}::{values[3]}::{values[4]}::{values[5]}\n")
+                    st.session_state["input_buffer"] = {} # 버퍼 비우기
+                    st.sidebar.success("🚀 전 품목 현장 스케줄 데이터 일괄 저장 완공!")
+                    time.sleep(0.5)
+                    st.rerun()
+                except Exception as e:
+                    st.sidebar.error(f"저장 실패: {e}")
+            else:
+                st.sidebar.info("💡 새로 변경된 내역이 없습니다.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown("---")
     st.write("📂 **새로운 스케줄 파일 업로드 / 교체**")
     uploaded_file = st.file_uploader("여기에 엑셀 파일을 드래그 앤 드롭 하세요.", type=["xlsx", "xls"], label_visibility="collapsed")
@@ -192,16 +218,15 @@ with st.sidebar:
     if uploaded_file and is_authenticated:
         with open(SAVED_EXCEL_PATH, "wb") as f:
             f.write(uploaded_file.getbuffer())
-        st.cache_data.clear() # 새 파일 인입 시 가상 메모리 전격 초기화
+        st.cache_data.clear() 
         st.success("🚀 마스터 스케줄 파일 교체 성공!")
         time.sleep(1)
         st.rerun()
 
 if final_file_target:
-    # 캐싱 적용된 고속 로더 엔진 교체
     df = load_and_clean_excel(final_file_target)
     
-    # 주차 타임스탬프 계산
+    # 주차 분리 연산
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
@@ -210,11 +235,9 @@ if final_file_target:
     second_monday_start = target_next_monday + timedelta(seconds=1)
     target_second_monday = (second_monday_start + timedelta(days=6)).replace(hour=23, minute=59, second=59)
     
-    saved_notes = load_production_notes()
-
     completed_codes = [code for code, vals in saved_notes.items() if len(vals) > 5 and vals[5] == "Y"]
     
-    # 지연 및 정상 주차 분리
+    # 지연 및 정상 스케줄 분류
     df_delayed = df[(df['production_date'] < today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
     df_active_pool = df[(df['production_date'] >= today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
     
@@ -313,7 +336,7 @@ if final_file_target:
             return r_idx + 2
             
         next_start_row = write_week_block(ws, df_1week, f"🗓️ 1주 차 생산 라인업 계획", current_row_idx)
-        write_week_block(ws, df_w2, f"🗓️ 2주 차 생산 라인업 계획", next_start_row)
+        write_week_block(ws, df_2weeks, next_start_row)
         
         for l, w in [('A', 15), ('B', 12), ('C', 16), ('D', 38), ('E', 12), ('F', 14), ('G', 16), ('H', 14), ('I', 14), ('J', 16), ('K', 12), ('L', 14), ('M', 14), ('N', 14)]:
             ws.column_dimensions[l].width = w
@@ -322,7 +345,6 @@ if final_file_target:
 
     with st.sidebar:
         st.markdown("---")
-        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
         st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
@@ -374,7 +396,7 @@ if final_file_target:
                         time.sleep(1)
                         st.rerun()
 
-    # 초경량 풀와획 반응형 CSS
+    # 🚨 [초절정 밀착형 팩토리 테마 마감 CSS 프로토콜]
     st.markdown("""
         <style>
             .floating-shortcut-anchor {
@@ -389,45 +411,35 @@ if final_file_target:
                 letter-spacing: -0.3px !important; cursor: pointer !important;
             }
             @media screen and (max-width: 768px) {
-                .floating-shortcut-anchor {
-                    top: 12px !important; right: 12px !important; transform: none !important;
-                    padding: 8px 12px !important; font-size: 12px !important; border-radius: 8px !important;
-                }
+                .floating-shortcut-anchor { top: 12px !important; right: 12px !important; transform: none !important; padding: 8px 12px !important; font-size: 12px !important; border-radius: 8px !important; }
             }
             
             html { scroll-behavior: smooth !important; }
             .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
             .owner-square-frame img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain !important; }
-            .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
+            
+            /* 🚨 개별 저장 버튼 파괴로 패딩 하단 마진 축소 조정 완공 */
+            .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 2px !important; }
             .owner-text-row { margin: 0px !important; padding: 0px !important; text-align: left !important; line-height: 1.4 !important; }
             
             div[data-testid="stVerticalBlock"] > div { margin-bottom: 0px !important; padding-bottom: 0px !important; }
             
-            /* 플레이스홀더 풀 와이드 기획 락 */
-            div[data-testid="stTextInput"] { display: block !important; margin-top: 0px !important; margin-bottom: 2px !important; padding: 0px !important; }
+            /* 플레이스홀더 와이드 락 */
+            div[data-testid="stTextInput"] { display: block !important; margin-top: 0px !important; margin-bottom: 1px !important; padding: 0px !important; }
             div[data-testid="stTextInput"] label { display: none !important; }
             div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div { width: 100% !important; }
             div[data-testid="stTextInput"] input { 
                 background-color: #0f172a !important; color: #38bdf8 !important; 
-                border: 1px solid #334155 !important; border-radius: 6px !important; 
-                font-size: 13px !important; height: 32px !important; padding: 4px 10px !important;
+                border: 1px solid #334155 !important; border-radius: 5px !important; 
+                font-size: 13px !important; height: 30px !important; padding: 3px 10px !important;
                 width: 100% !important;
             }
             
-            div[data-testid="stCheckbox"] { background-color: #111827 !important; border: 1px dashed #ef4444 !important; border-radius: 8px !important; padding: 6px 12px !important; margin-top: 5px !important; margin-bottom: 8px !important; }
+            div[data-testid="stCheckbox"] { background-color: #111827 !important; border: 1px dashed #ef4444 !important; border-radius: 8px !important; padding: 6px 12px !important; margin-top: 4px !important; margin-bottom: 4px !important; }
             div[data-testid="stCheckbox"] label span { color: #f87171 !important; font-weight: bold !important; font-size: 14px !important; }
             div.delay-box-mark div[data-testid="stCheckbox"] { border: 1px solid #ff0000 !important; background-color: #2d1616 !important; }
             div.delay-box-mark div[data-testid="stCheckbox"] label span { color: #ff6b6b !important; }
             
-            /* 💾 [일괄 저장 버튼 전용 명품 스타일 주입] */
-            div.owner-save-btn-zone button {
-                background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-                color: white !important; border: 1px solid #34d399 !important; border-radius: 6px !important;
-                font-weight: bold !important; font-size: 13px !important; height: 34px !important;
-                box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3) !important; transition: all 0.1s !important;
-            }
-            div.owner-save-btn-zone button:hover { background: #34d399 !important; color: #0f172a !important; transform: scale(1.02) !important; }
-
             .element-container { margin-bottom: 0px !important; padding-bottom: 0px !important; }
         </style>
     """, unsafe_allow_html=True)
@@ -483,31 +495,49 @@ if final_file_target:
                             else: check_label = "🚨 완료 시 체크 (하단 이동)"
                                 
                             if is_delay_tab: st.markdown('<div class="delay-box-mark">', unsafe_allow_html=True)
+                            
+                            # 체크박스 상태 변경은 즉각적으로 디스크에 영구 반영되도록 유지 (완료 탭 순간 이동 기믹)
                             user_checked = st.checkbox(label=check_label, value=current_check_state, key=f"chk_{section_prefix}_{pure_excel_code}_{idx}")
                             if is_delay_tab: st.markdown('</div>', unsafe_allow_html=True)
                                 
                             if user_checked != current_check_state:
                                 next_status = "Y" if user_checked else "N"
-                                save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
+                                # 임시 세션 버퍼에 수정 중인 데이터가 있으면 같이 엮어서 영구 저장 처리
+                                buffered_vals = st.session_state["input_buffer"].get(pure_excel_code, memo_tuple[:5])
+                                with open(NOTES_DB_PATH, "r", encoding="utf-8") as f_r:
+                                    lines = f_r.readlines()
+                                current_full_notes = {}
+                                for line in lines:
+                                    if "::" in line:
+                                        p = line.split("::", 6)
+                                        current_full_notes[p[0].strip()] = (p[1].strip(), p[2].strip(), p[3].strip(), p[4].strip(), p[5].strip(), p[6].strip())
+                                current_full_notes[pure_excel_code] = (buffered_vals[0], buffered_vals[1], buffered_vals[2], buffered_vals[3], buffered_vals[4], next_status)
+                                with open(NOTES_DB_PATH, "w", encoding="utf-8") as f_w:
+                                    for k, v in current_full_notes.items():
+                                        f_w.write(f"{k}::{v[0]}::{v[1]}::{v[2]}::{v[3]}::{v[4]}::{v[5]}\n")
+                                if pure_excel_code in st.session_state["input_buffer"]:
+                                    del st.session_state["input_buffer"][pure_excel_code]
                                 st.rerun()
                             
-                            # 🚨 [2안 핵심 설계 마감 조항] : 타이핑 중 새로고침이 절대 발생하지 않도록 폼 내부 메모리에 값을 1차 홀딩
-                            u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0] if memo_tuple[0] != "-" else "", placeholder="1. 카톤코드 입력", key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1] if memo_tuple[1] != "-" else "", placeholder="2. 개입수 입력", key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2] if memo_tuple[2] != "-" else "", placeholder="3. 제조일 입력", key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3] if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
-                            u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4] if memo_tuple[4] != "-" else "", placeholder="5. 생산수량 입력", key=f"inp_s_{section_prefix}_{pure_excel_code}_{idx}")
+                            # 🚨 [1:N 일괄 버퍼링 공정 이식]: 개별 카드 저장 버튼 소멸
+                            # 사용자가 타이핑하는 동안 st.session_state 버퍼 메모리에 실시간 누적 저장
+                            buf_c = st.text_input(label="1. 카톤코드", value=memo_tuple[0] if memo_tuple[0] != "-" else "", placeholder="1. 카톤코드 입력", key=f"inp_c_{section_prefix}_{pure_excel_code}_{idx}")
+                            buf_p = st.text_input(label="2. 개입수", value=memo_tuple[1] if memo_tuple[1] != "-" else "", placeholder="2. 개입수 입력", key=f"inp_p_{section_prefix}_{pure_excel_code}_{idx}")
+                            buf_d = st.text_input(label="3. 제조일", value=memo_tuple[2] if memo_tuple[2] != "-" else "", placeholder="3. 제조일 입력", key=f"inp_d_{section_prefix}_{pure_excel_code}_{idx}")
+                            buf_q = st.text_input(label="4. 제조량", value=memo_tuple[3] if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_{section_prefix}_{pure_excel_code}_{idx}")
+                            buf_s = st.text_input(label="5. 생산수량", value=memo_tuple[4] if memo_tuple[4] != "-" else "", placeholder="5. 생산수량 입력", key=f"inp_s_{section_prefix}_{pure_excel_code}_{idx}")
                             
-                            # 🚨 [일괄 완료 컴파일 스위치] : 5개 정보 기입 후 원터치로 파일로그 영구 박음질
-                            st.markdown('<div class="owner-save-btn-zone">', unsafe_allow_html=True)
-                            if st.button("💾 이 카드 정보 저장", key=f"btn_save_{section_prefix}_{pure_excel_code}_{idx}", use_container_width=True):
-                                save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
-                                st.toast(f"🎯 [{pure_excel_code}] 실무 데이터가 디스크에 영구 병합되었습니다.")
-                                time.sleep(0.3)
-                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
+                            # 기존 값과 단 1개라도 달라지면 임시 일괄 저장 대기 버퍼에 킵
+                            orig_c = memo_tuple[0] if memo_tuple[0] != "-" else ""
+                            orig_p = memo_tuple[1] if memo_tuple[1] != "-" else ""
+                            orig_d = memo_tuple[2] if memo_tuple[2] != "-" else ""
+                            orig_q = memo_tuple[3] if memo_tuple[3] != "-" else ""
+                            orig_s = memo_tuple[4] if memo_tuple[4] != "-" else ""
+                            
+                            if (buf_c != orig_c or buf_p != orig_p or buf_d != orig_d or buf_q != orig_q or buf_s != orig_s):
+                                st.session_state["input_buffer"][pure_excel_code] = (buf_c, buf_p, buf_d, buf_q, buf_s, memo_tuple[5])
                                 
-                            st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+                            st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
 
             # 기타 카테고리
             other_df = target_df[~target_df['category'].str.lower().str.contains('skin|body|hair')]
@@ -543,35 +573,46 @@ if final_file_target:
                         user_checked = st.checkbox(label=check_label, value=current_check_state, key=f"chk_oth_{pure_excel_code}_{idx}")
                         if user_checked != current_check_state:
                             next_status = "Y" if user_checked else "N"
-                            save_production_note(pure_excel_code, memo_tuple[0], memo_tuple[1], memo_tuple[2], memo_tuple[3], memo_tuple[4], next_status)
+                            buffered_vals = st.session_state["input_buffer"].get(pure_excel_code, memo_tuple[:5])
+                            with open(NOTES_DB_PATH, "r", encoding="utf-8") as f_r: lines = f_r.readlines()
+                            current_full_notes = {}
+                            for line in lines:
+                                if "::" in line:
+                                    p = line.split("::", 6)
+                                    current_full_notes[p[0].strip()] = (p[1].strip(), p[2].strip(), p[3].strip(), p[4].strip(), p[5].strip(), p[6].strip())
+                            current_full_notes[pure_excel_code] = (buffered_vals[0], buffered_vals[1], buffered_vals[2], buffered_vals[3], buffered_vals[4], next_status)
+                            with open(NOTES_DB_PATH, "w", encoding="utf-8") as f_w:
+                                for k, v in current_full_notes.items(): f_w.write(f"{k}::{v[0]}::{v[1]}::{v[2]}::{v[3]}::{v[4]}::{v[5]}\n")
+                            if pure_excel_code in st.session_state["input_buffer"]: del st.session_state["input_buffer"][pure_excel_code]
                             st.rerun()
                             
-                        u_c_code = st.text_input(label="1. 카톤코드", value=memo_tuple[0] if memo_tuple[0] != "-" else "", placeholder="1. 카톤코드 입력", key=f"inp_c_oth_{pure_excel_code}_{idx}")
-                        u_pack_qty = st.text_input(label="2. 개입수", value=memo_tuple[1] if memo_tuple[1] != "-" else "", placeholder="2. 개입수 입력", key=f"inp_p_oth_{pure_excel_code}_{idx}")
-                        u_m_date = st.text_input(label="3. 제조일", value=memo_tuple[2] if memo_tuple[2] != "-" else "", placeholder="3. 제조일 입력", key=f"inp_d_oth_{pure_excel_code}_{idx}")
-                        u_m_qty = st.text_input(label="4. 제조량", value=memo_tuple[3] if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_oth_{pure_excel_code}_{idx}")
-                        u_p_qty = st.text_input(label="5. 생산수량", value=memo_tuple[4] if memo_tuple[4] != "-" else "", placeholder="5. 생산수량 입력", key=f"inp_s_oth_{pure_excel_code}_{idx}")
+                        buf_c = st.text_input(label="1. 카톤코드", value=memo_tuple[0] if memo_tuple[0] != "-" else "", placeholder="1. 카톤코드 입력", key=f"inp_c_oth_{pure_excel_code}_{idx}")
+                        buf_p = st.text_input(label="2. 개입수", value=memo_tuple[1] if memo_tuple[1] != "-" else "", placeholder="2. 개입수 입력", key=f"inp_p_oth_{pure_excel_code}_{idx}")
+                        buf_d = st.text_input(label="3. 제조일", value=memo_tuple[2] if memo_tuple[2] != "-" else "", placeholder="3. 제조일 입력", key=f"inp_d_oth_{pure_excel_code}_{idx}")
+                        buf_q = st.text_input(label="4. 제조량", value=memo_tuple[3] if memo_tuple[3] != "-" else "", placeholder="4. 제조량 입력", key=f"inp_q_oth_{pure_excel_code}_{idx}")
+                        buf_s = st.text_input(label="5. 생산수량", value=memo_tuple[4] if memo_tuple[4] != "-" else "", placeholder="5. 생산수량 입력", key=f"inp_s_oth_{pure_excel_code}_{idx}")
                         
-                        st.markdown('<div class="owner-save-btn-zone">', unsafe_allow_html=True)
-                        if st.button("💾 이 카드 정보 저장", key=f"btn_save_oth_{pure_excel_code}_{idx}", use_container_width=True):
-                            save_production_note(pure_excel_code, u_c_code, u_pack_qty, u_m_date, u_m_qty, u_p_qty, memo_tuple[5])
-                            st.toast(f"🎯 [{pure_excel_code}] 실무 데이터가 디스크에 영구 병합되었습니다.")
-                            time.sleep(0.3)
-                            st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
+                        orig_c = memo_tuple[0] if memo_tuple[0] != "-" else ""
+                        orig_p = memo_tuple[1] if memo_tuple[1] != "-" else ""
+                        orig_d = memo_tuple[2] if memo_tuple[2] != "-" else ""
+                        orig_q = memo_tuple[3] if memo_tuple[3] != "-" else ""
+                        orig_s = memo_tuple[4] if memo_tuple[4] != "-" else ""
+                        
+                        if (buf_c != orig_c or buf_p != orig_p or buf_d != orig_d or buf_q != orig_q or buf_s != orig_s):
+                            st.session_state["input_buffer"][pure_excel_code] = (buf_c, buf_p, buf_d, buf_q, buf_s, memo_tuple[5])
+                        st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
 
-    # 지연 구역
+    # 지연 구역 리스트
     if not df_delayed.empty:
         st.markdown("""<div style='margin-top:20px; border-bottom: 4px solid #ff0000; padding-bottom:5px;'><h2 style='color:#ff4d4d; font-weight:bold;'>⚠️ FINE FORMULATION 생산 스케줄 지연 알림 리스트</h2></div>""", unsafe_allow_html=True)
-        render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목", "delayed", is_delay_tab=True)
+        render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목 (현장 즉시 독촉 필요)", "delayed", is_delay_tab=True)
         st.markdown("""<div style='margin-top:30px; margin-bottom:30px; border-bottom: 2px dashed #475569;'></div>""", unsafe_allow_html=True)
 
     # 현역 주차 보드
     render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1", inject_anchor=True)
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
     
-    # 완료 목록 구역
+    # 완료 영구 보존 구역
     st.markdown("""<div style='margin-top:80px; border-bottom: 3px dashed #10b981;'></div>""", unsafe_allow_html=True)
     render_schedule_grid(df_completed_pool, f"✅ 실시간 생산 완료 영구 보존 라인업 (주차 무관 상시 보존)", "done", is_completed_tab=True)
 
