@@ -139,7 +139,7 @@ final_file_target = SAVED_EXCEL_PATH if has_saved_file else None
 
 with st.sidebar:
     st.markdown(f'<div style="color:#ffffff; font-size:15px; font-weight:bold; background-color:#0284c7; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">🟢 시스템 가동 중 (활동 중 자동 연장)</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#38bdf8; margin-bottom:15px; border-bottom:2px solid #38bdf8; padding-bottom:5px;">⚙️ 마스터 데이터 제어 센터</div>', unsafe_allow_html=True)
     
     input_password = st.text_input("🔓 데이터 제어 승인 암호", type="password", key="auth_pwd_input")
     is_authenticated = (input_password == MASTER_PASSWORD)
@@ -199,7 +199,7 @@ if final_file_target:
     df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
     df = df.sort_values(by=['category', 'item_code', 'production_date'], ascending=[True, True, True])
     
-    # [주차 타임스탬프 캘린더 엔진 가동]
+    # 주차 분리 타임스탬프 계산
     today_dt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     current_weekday = today_dt.weekday() 
     next_monday_dist = (7 - current_weekday) % 7 or 7
@@ -210,19 +210,15 @@ if final_file_target:
     
     saved_notes = load_production_notes()
 
-    # 영구 기억용 상태 리스트 분리용 변수
     completed_codes = [code for code, vals in saved_notes.items() if len(vals) > 5 and vals[5] == "Y"]
     
-    # 최상단 지연 아이템 선별
+    # 최상단 지연 및 액티브 풀 분리
     df_delayed = df[(df['production_date'] < today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
-    
-    # 정상 스케줄 목록 배선
     df_active_pool = df[(df['production_date'] >= today_dt) & (~df['item_code'].apply(extract_pure_6_code).isin(completed_codes))].copy()
     
     df_1week = df_active_pool[df_active_pool['production_date'] <= target_next_monday].copy()
     df_2weeks = df_active_pool[(df_active_pool['production_date'] >= second_monday_start) & (df_active_pool['production_date'] <= target_second_monday)].copy()
     
-    # 하단 고정 생산완료 풀
     df_completed_pool = df[df['item_code'].apply(extract_pure_6_code).isin(completed_codes)].copy()
 
     # ---------------------------------------------------------------------
@@ -324,13 +320,13 @@ if final_file_target:
 
     with st.sidebar:
         st.markdown("---")
-        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 엑셀 데이터 추출</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:16px; font-weight:bold; color:#38bdf8;">📥 오너 기획 데이터 추출 센터</div>', unsafe_allow_html=True)
         split_excel_bytes = generate_premium_split_excel(df_1week, df_2weeks)
         st.download_button(label="📊 주차별 분리 마스터 엑셀 다운로드", data=split_excel_bytes, file_name=f"Fine_Formulation_Split_Schedule_{datetime.now().strftime('%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
         st.markdown("---")
-        st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업</div>', unsafe_allow_html=True)
-        if st.button("🔄 현재 스케줄 제품 이미지 서버에 저장", use_container_width=True):
+        st.markdown('<div style="font-size:16px; font-weight:bold; color:#fbbf24;">⚡ 트렐로 이미지 서버 백업 센터</div>', unsafe_allow_html=True)
+        if st.button("🔄 현재 스케줄 이미지 서버에 저장", use_container_width=True):
             if is_authenticated:
                 sync_success_count = 0
                 status_placeholder = st.empty()
@@ -378,10 +374,10 @@ if final_file_target:
             else:
                 st.error("❌ 승인 암호가 올바르지 않습니다.")
 
-    # 🚨 [초고속 앵커 링커 및 스크롤바 숏컷 고정 디자인 CSS 주입]
+    # 🚨 [하이브리드 디바이스 감지형 반응형 CSS 공정 완공]
     st.markdown("""
         <style>
-            /* 🚀 [대표님 명세 조항]: 우측 스크롤바 옆 화면 중앙에 절대 고정되는 플로팅 네온 버튼 설계 */
+            /* 🖥️ 기본 PC 브라우저 레이아웃 규칙 (우측 스크롤바 중앙 정렬 고정) */
             .floating-shortcut-anchor {
                 position: fixed !important;
                 right: 35px !important;
@@ -406,15 +402,28 @@ if final_file_target:
                 cursor: pointer !important;
             }
             .floating-shortcut-anchor:hover {
-                background: #38bdf8 !important;
-                color: #0f172a !important;
+                background: #38bdf8 !important; color: #0f172a !important;
                 transform: translateY(-50%) scale(1.05) !important;
                 box-shadow: 0 0 30px rgba(56, 189, 248, 0.9) !important;
             }
             
-            /* 기본 스크롤 동작 부드럽게 세팅 */
+            /* 📱 [🚨 대표님 지시 무결점 투사 조항]: 모바일(폰) 웹 뷰 환경 정밀 탐색 미디어 쿼리 */
+            @media screen and (max-width: 768px) {
+                .floating-shortcut-anchor {
+                    top: 12px !important;      /* ➔ 중앙에서 우측 윗단 엣지로 탈출 */
+                    right: 12px !important;
+                    transform: none !important;  /* 세로축 중앙 정렬 제거 */
+                    padding: 8px 12px !important; /* 모바일 전용 콤팩트 규격 압축 */
+                    font-size: 12px !important;
+                    border-radius: 8px !important;
+                    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4) !important;
+                }
+                .floating-shortcut-anchor:hover {
+                    transform: scale(1.02) !important;
+                }
+            }
+            
             html { scroll-behavior: smooth !important; }
-
             .owner-square-frame { width: 100% !important; aspect-ratio: 1 / 1 !important; background-color: transparent !important; display: flex !important; justify-content: center !important; align-items: center !important; overflow: hidden !important; padding: 5px !important; box-sizing: border-box !important; margin-bottom: 8px !important; }
             .owner-square-frame img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain !important; }
             .owner-info-card-wrap { background-color: #1e2530 !important; border: 1px solid #2d3748 !important; border-radius: 14px !important; padding: 18px !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.4) !important; margin-bottom: 8px !important; }
@@ -422,7 +431,6 @@ if final_file_target:
             
             div[data-testid="stVerticalBlock"] > div { margin-bottom: 0px !important; padding-bottom: 0px !important; }
             
-            /* 가로형 정렬 */
             div[data-testid="stTextInput"] { 
                 display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important;
                 margin-top: 0px !important; margin-bottom: 1px !important; padding: 0px !important; gap: 10px !important;
@@ -434,7 +442,6 @@ if final_file_target:
             div[data-testid="stTextInput"] div[data-testid="stWidgetLabel"] + div { flex-grow: 1 !important; width: 100% !important; }
             div[data-testid="stTextInput"] input { background-color: #0f172a !important; color: #38bdf8 !important; border: 1px solid #334155 !important; border-radius: 6px !important; font-size: 13px !important; height: 28px !important; padding: 2px 8px !important; }
             
-            /* 체크박스 스타일 */
             div[data-testid="stCheckbox"] { background-color: #111827 !important; border: 1px dashed #ef4444 !important; border-radius: 8px !important; padding: 6px 12px !important; margin-top: 5px !important; margin-bottom: 8px !important; }
             div[data-testid="stCheckbox"] label span { color: #f87171 !important; font-weight: bold !important; font-size: 14px !important; }
             
@@ -445,16 +452,14 @@ if final_file_target:
         </style>
     """, unsafe_allow_html=True)
 
-    # 🚨 [초고속 HTML 물리 앵커 타겟팅 다이렉트 사출] : 스크롤 유도용 고유 태그 박음질
-    st.markdown('<a href="#current-week-target" class="floating-shortcut-anchor">📅 현재 주차로 이동</a>', unsafe_allow_html=True)
+    # 앵커 링크 연결 사출
+    st.markdown('<a href="#current-week-target" class="floating-shortcut-anchor">📅 현재 주차 이동</a>', unsafe_allow_html=True)
 
     def render_schedule_grid(target_df, title_label, section_prefix, is_completed_tab=False, is_delay_tab=False, inject_anchor=False):
         if is_delay_tab and target_df.empty:
             return
             
         st.markdown("---")
-        
-        # 🚨 [앵커 체인 바인딩 구역]: 1주차 구역이 렌더링될 때 정확한 HTML ID를 투사하여 타겟 주소를 확보합니다.
         if inject_anchor:
             st.markdown('<div id="current-week-target" style="padding-top:10px;"></div>', unsafe_allow_html=True)
             
@@ -569,17 +574,17 @@ if final_file_target:
                             st.rerun()
                         st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
 
-    # 최상단 지연 아이템 리스트
+    # 최상단 지연 구역
     if not df_delayed.empty:
         st.markdown("""<div style='margin-top:20px; border-bottom: 4px solid #ff0000; padding-bottom:5px;'><h2 style='color:#ff4d4d; font-weight:bold;'>⚠️ FINE FORMULATION 생산 스케줄 지연 알림 리스트</h2></div>""", unsafe_allow_html=True)
-        render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목", "delayed", is_delay_tab=True)
+        render_schedule_grid(df_delayed, "⚠️ 기한 초과 및 미완료 품목 (현장 즉시 독촉 필요)", "delayed", is_delay_tab=True)
         st.markdown("""<div style='margin-top:30px; margin-bottom:30px; border-bottom: 2px dashed #475569;'></div>""", unsafe_allow_html=True)
 
-    # 🚨 [1주차 구역에 앵커 스위치 True 주입] : 버튼 클릭 시 이 위치로 화면이 스무스하게 스크롤다운됩니다.
+    # 중단 가동 주차 보드
     render_schedule_grid(df_1week, f"📅 1주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w1", inject_anchor=True)
     render_schedule_grid(df_2weeks, f"📅 2주 차 생산 스케줄 대쉬보드 (V열 기한 기준)", "w2")
     
-    # 최하단 완료 풀
+    # 최하단 완료 구역
     st.markdown("""<div style='margin-top:80px; border-bottom: 3px dashed #10b981;'></div>""", unsafe_allow_html=True)
     render_schedule_grid(df_completed_pool, f"✅ 실시간 생산 완료 영구 보존 라인업 (주차 무관 상시 보존)", "done", is_completed_tab=True)
 
